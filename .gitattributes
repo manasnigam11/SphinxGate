@@ -1,0 +1,22 @@
+# ── SphinxGate — Git line-ending policy ─────────────────────────────────────
+# Normalize all text files to LF in the repo (Unix-style).
+# Git will convert to CRLF on checkout on Windows if core.autocrlf=true,
+# but the repo itself always stores LF — no mixed line endings.
+
+* text=auto eol=lf
+
+# Explicitly mark binary files so Git never messes with them.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary

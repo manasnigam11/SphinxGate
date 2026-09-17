@@ -1,21 +1,37 @@
+# ── SphinxGate Frontend .gitignore ───────────────────────────────────────────
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
 node_modules/
+
+# ── Build output ──────────────────────────────────────────────────────────────
 dist/
 build/
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
 .cache/
-.env*
 .vite/
 vite.config.*.timestamp-*
+
+# ── TypeScript ────────────────────────────────────────────────────────────────
 *.tsbuildinfo
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
 *-debug.log*
 logs/
-*.log
+
+# ── Tooling / platform artifacts ──────────────────────────────────────────────
 .claude-replay.*
 .tmp-*
 /.figma/design-context/
-
-# Platform-managed agentplat state, not project source. In the
-# client-initiated single-repo workspace layout (make's `Path: "."` spec) the
-# repo root IS the workspace root, so these land inside this repo rather than
-# beside it.
 /.plugins/
 /.opencode-skills/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

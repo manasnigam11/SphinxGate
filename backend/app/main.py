@@ -27,8 +27,8 @@ logger = logging.getLogger("sphinxgate")
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="SphinxGate",
-    description="AI API Gateway — Phase 1",
-    version="0.1.0",
+    description="AI API Gateway — Phase 2 (Resilience Engine)",
+    version="0.2.0",
     docs_url="/docs",   # Swagger UI available at http://localhost:8000/docs
     redoc_url="/redoc",
 )
@@ -51,6 +51,7 @@ app.add_middleware(
         "X-Retry-Count",
         "X-Circuit-State",
         "X-Tokens-Used",
+        "X-Fallback-Used",
     ],
 )
 
@@ -58,17 +59,27 @@ app.add_middleware(
 # ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/health", tags=["meta"])
 async def health():
-    """Simple liveness endpoint. Returns the list of configured providers."""
+    """Simple liveness endpoint. Returns configured providers and their circuit state."""
+    from app.gateway.router import get_engine
     from app.providers.registry import list_providers
+
+    engine = get_engine()
+    circuit_snapshots = {s["provider"]: s for s in engine.get_circuit_snapshots()}
 
     configured = []
     for slug in list_providers():
         key = settings.get_provider_api_key(slug)
-        configured.append({"provider": slug, "configured": key is not None})
+        snap = circuit_snapshots.get(slug, {})
+        configured.append({
+            "provider": slug,
+            "configured": key is not None,
+            "circuit_state": snap.get("state", "closed"),
+            "failure_count": snap.get("failure_count", 0),
+        })
 
     return {
         "status": "ok",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "default_provider": settings.default_provider,
         "providers": configured,
     }

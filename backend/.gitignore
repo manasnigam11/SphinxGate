@@ -1,10 +1,46 @@
+# ── SphinxGate Backend .gitignore ────────────────────────────────────────────
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
 .env
-__pycache__/
-*.pyc
-*.pyo
+.env.*
+!.env.example
+
+# ── Python virtual environments ───────────────────────────────────────────────
 .venv/
 venv/
-.env
+env/
+ENV/
+
+# ── Compiled Python ───────────────────────────────────────────────────────────
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+
+# ── Distribution / packaging ───────────────────────────────────────────────────
 dist/
+build/
 *.egg-info/
+*.egg
+MANIFEST
+
+# ── Testing ───────────────────────────────────────────────────────────────────
 .pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+
+# ── Type checkers & linters ────────────────────────────────────────────────────
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# ── Jupyter ───────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+logs/
