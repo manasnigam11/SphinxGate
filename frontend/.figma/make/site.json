@@ -1,0 +1,10 @@
+{
+  "description": "This developer platform streamlines API management, monitoring, and incident analysis, empowering engineers to optimize AI/API integrations effectively.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
