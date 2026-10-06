@@ -83,6 +83,16 @@ class ResiliencePolicySettings(BaseSettings):
     # Format: primary1:fallback1a,fallback1b|primary2:fallback2a
     fallback_chains: str = Field(default="", alias="RESILIENCE_FALLBACK_CHAINS")
 
+    # ── Graceful degradation (Phase 5) ────────────────────────────────────────
+    # When every provider has failed for a *public API* request, serve the last
+    # known-good cached response — explicitly labelled "degraded" — instead of a
+    # bare 503.  Never applies to LLM providers (no fabricated AI answers).
+    degradation_enabled: bool = Field(default=True, alias="RESILIENCE_DEGRADATION_ENABLED")
+    # Never serve cached data older than this during degradation.
+    degradation_max_stale_seconds: float = Field(
+        default=3600.0, alias="RESILIENCE_DEGRADATION_MAX_STALE_SECONDS"
+    )
+
     def get_fallback_configs(self) -> dict[str, FallbackConfig]:
         """
         Parse the RESILIENCE_FALLBACK_CHAINS env var into a dict of FallbackConfig.
@@ -127,6 +137,8 @@ class ResiliencePolicy:
     rate_limit_window_seconds: float
     fallback_enabled: bool
     fallback_configs: dict[str, FallbackConfig]
+    degradation_enabled: bool = True
+    degradation_max_stale_seconds: float = 3600.0
 
     @classmethod
     def from_settings(cls, s: Optional[ResiliencePolicySettings] = None) -> "ResiliencePolicy":
@@ -145,6 +157,8 @@ class ResiliencePolicy:
             rate_limit_window_seconds=s.rate_limit_window_seconds,
             fallback_enabled=s.fallback_enabled,
             fallback_configs=s.get_fallback_configs(),
+            degradation_enabled=s.degradation_enabled,
+            degradation_max_stale_seconds=s.degradation_max_stale_seconds,
         )
 
     def to_dict(self) -> dict:
@@ -161,4 +175,12 @@ class ResiliencePolicy:
             "circuitBreakerWindow": int(self.circuit_recovery_window_seconds),
             "fallbackEnabled": self.fallback_enabled,
             "rateLimitRps": self.rate_limit_requests,
+            # Phase 5 — everything the Policies page needs, straight from the engine
+            "retryEnabled": self.retry_enabled,
+            "rateLimitWindowSeconds": self.rate_limit_window_seconds,
+            "fallbackChains": {
+                primary: cfg.fallbacks for primary, cfg in self.fallback_configs.items()
+            },
+            "degradationEnabled": self.degradation_enabled,
+            "degradationMaxStaleSeconds": self.degradation_max_stale_seconds,
         }

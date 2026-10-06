@@ -230,6 +230,42 @@ class CircuitBreaker:
                     )
             # If already OPEN, just update the failure info (already logged).
 
+    async def force_open(self, reason: str) -> None:
+        """
+        Forcibly transition the circuit breaker to OPEN.
+        Used when the ActiveHealthChecker confirms a provider is totally dead,
+        so the UI and internal state stay synchronized.
+        """
+        async with self._lock:
+            old = self._state.state
+            if old != CircuitState.OPEN:
+                self._state.state = CircuitState.OPEN
+                self._state.opened_at = time.time()
+                self._state.record_transition(
+                    old, CircuitState.OPEN,
+                    f"forced open: {reason}",
+                )
+                logger.warning(
+                    "[%s] circuit → OPEN (forced: %s)",
+                    self._slug, reason,
+                )
+
+    async def abort_probe(self, reason: str = "probe inconclusive") -> None:
+        """
+        Return a HALF-OPEN circuit to OPEN with a fresh recovery timer.
+
+        Called when the single recovery probe ended without a verdict (a
+        non-circuit-counting error such as HTTP 401, or task cancellation).
+        Without this the circuit would stay HALF-OPEN forever, because
+        allow_request() blocks everything while HALF-OPEN.
+        """
+        async with self._lock:
+            if self._state.state == CircuitState.HALF_OPEN:
+                self._state.state = CircuitState.OPEN
+                self._state.opened_at = time.time()
+                self._state.record_transition(CircuitState.HALF_OPEN, CircuitState.OPEN, reason)
+                logger.warning("[%s] circuit → OPEN (%s)", self._slug, reason)
+
     # ── State introspection (for Phase 3 / health endpoint) ───────────────────
 
     @property
@@ -300,3 +336,17 @@ class CircuitBreakerRegistry:
     def get_all_snapshots(self) -> list[dict]:
         """Return snapshots of all known circuit breakers."""
         return [cb.get_snapshot() for cb in self._breakers.values()]
+
+    def default_snapshot(self, provider_slug: str) -> dict:
+        """Snapshot for a provider whose breaker has not been created yet."""
+        return {
+            "provider": provider_slug,
+            "state": CircuitState.CLOSED.value,
+            "failure_count": 0,
+            "failure_threshold": self._threshold,
+            "last_failure_kind": None,
+            "last_failure_at": None,
+            "opened_at": None,
+            "recovery_window_seconds": self._recovery_window,
+            "transition_history": [],
+        }

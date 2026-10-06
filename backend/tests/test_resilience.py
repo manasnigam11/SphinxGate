@@ -38,6 +38,7 @@ from app.resilience.rate_limiter import GatewayRateLimiter
 from app.resilience.engine import ResilienceEngine
 from app.resilience.policy import ResiliencePolicy, FallbackConfig
 from app.resilience.events import RETRY_ATTEMPTED, RETRY_EXHAUSTED, CIRCUIT_OPENED, FALLBACK_ATTEMPTED
+from app.providers.base import BaseLLMProvider
 
 import httpx
 
@@ -63,9 +64,12 @@ def make_policy(**overrides) -> ResiliencePolicy:
     return ResiliencePolicy(**defaults)
 
 
-class FakeProvider:
+class FakeProvider(BaseLLMProvider):
     """
     Fake provider that returns preconfigured responses or raises preconfigured errors.
+
+    Extends BaseLLMProvider so it gets call() → chat_completion() delegation
+    for free, satisfying the abstract interface.
 
     responses: list of callables or dicts / exceptions to return/raise in order.
     If the list is exhausted the last item is repeated.

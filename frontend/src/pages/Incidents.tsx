@@ -1,7 +1,16 @@
-import React, { useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Badge, Button, Card, SectionHeader } from "../components/ui";
-import { INCIDENTS } from "../data/mock";
-import type { Incident } from "../types";
+import {
+  fetchIncidents,
+  fetchIncidentSummary,
+  acknowledgeIncident,
+  investigateIncident,
+  resolveIncident,
+  formatTimestamp,
+  formatRelativeTime,
+  type Incident,
+  type IncidentSummary,
+} from "../api";
 
 function severityVariant(s: string) {
   if (s === "critical") return "error";
@@ -10,40 +19,138 @@ function severityVariant(s: string) {
   return "muted";
 }
 
-function IncidentDetail({ incident, onBack }: { incident: Incident; onBack: () => void }) {
-  const [showAI, setShowAI] = useState(false);
-  const ai = incident.aiAnalysis;
+function statusVariant(status: string) {
+  if (status === "resolved") return "success";
+  if (status === "acknowledged" || status === "investigating") return "warning";
+  return "error";
+}
+
+function IncidentDetail({
+  incident: initialIncident,
+  onBack,
+  onUpdate,
+}: {
+  incident: Incident;
+  onBack: () => void;
+  onUpdate: () => void;
+}) {
+  const [incident, setIncident] = useState<Incident>(initialIncident);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [resolveNote, setResolveNote] = useState("");
+  const [showResolveInput, setShowResolveInput] = useState(false);
+
+  const handleAction = async (action: "acknowledge" | "investigate" | "resolve") => {
+    setActionLoading(true);
+    try {
+      let result;
+      if (action === "acknowledge") {
+        result = await acknowledgeIncident(incident.incident_id);
+      } else if (action === "investigate") {
+        result = await investigateIncident(incident.incident_id);
+      } else if (action === "resolve") {
+        result = await resolveIncident(incident.incident_id, resolveNote);
+        setShowResolveInput(false);
+      }
+      if (result) {
+        setIncident(result.incident);
+        onUpdate();
+      }
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to perform action");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-fade-in">
       <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        <button
+          onClick={onBack}
+          className="text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="mono text-sm text-[var(--muted-foreground)]">{incident.id}</span>
-            <Badge variant={severityVariant(incident.severity) as "error" | "warning" | "info" | "muted"}>{incident.severity.toUpperCase()}</Badge>
-            <Badge variant={incident.status === "resolved" ? "success" : incident.status === "mitigating" ? "warning" : "error"}>
+            <span className="mono text-sm text-[var(--muted-foreground)]">{incident.incident_id}</span>
+            <Badge variant={severityVariant(incident.severity) as any}>{incident.severity.toUpperCase()}</Badge>
+            <Badge variant={statusVariant(incident.status) as any}>
               {incident.status.charAt(0).toUpperCase() + incident.status.slice(1)}
             </Badge>
+            {incident.fault_injected && (
+              <Badge variant="muted" dot>FAULT INJECTED</Badge>
+            )}
           </div>
           <h1 className="text-xl font-semibold text-[var(--foreground)] mt-1">{incident.title}</h1>
-          <div className="text-xs text-[var(--muted-foreground)] mt-1">{incident.provider} · Started {incident.started.split(" ")[1]}{incident.duration ? ` · Duration: ${incident.duration}` : ""}</div>
+          <div className="text-xs text-[var(--muted-foreground)] mt-1">
+            {incident.provider_display_name} · Started {formatTimestamp(incident.started_at)}
+            {incident.duration_seconds !== null ? ` · Duration: ${incident.duration_seconds}s` : ""}
+          </div>
         </div>
-        {!showAI && (
-          <Button variant="primary" size="sm" onClick={() => setShowAI(true)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
-            Analyze with AI
-          </Button>
-        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          {incident.status === "open" && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleAction("acknowledge")}
+              disabled={actionLoading}
+            >
+              Acknowledge
+            </Button>
+          )}
+          {(incident.status === "open" || incident.status === "acknowledged") && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => handleAction("investigate")}
+              disabled={actionLoading}
+            >
+              Investigate
+            </Button>
+          )}
+          {incident.status !== "resolved" && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowResolveInput(!showResolveInput)}
+              disabled={actionLoading}
+            >
+              Resolve
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 max-lg:grid-cols-2">
+      {showResolveInput && (
+        <Card className="p-4 bg-[var(--secondary)] flex gap-3 items-center">
+          <input
+            type="text"
+            className="flex-1 text-sm bg-[var(--background)] border border-[var(--border)] rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+            placeholder="Resolution note (optional)"
+            value={resolveNote}
+            onChange={(e) => setResolveNote(e.target.value)}
+          />
+          <Button variant="primary" size="sm" onClick={() => handleAction("resolve")} disabled={actionLoading}>
+            Confirm Resolve
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setShowResolveInput(false)}>
+            Cancel
+          </Button>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-4 gap-4 max-lg:grid-cols-2">
         {[
-          { label: "Affected Requests", value: incident.affectedRequests.toLocaleString() },
-          { label: "Failure Rate", value: `${incident.failureRate}%` },
-          { label: "Peak Latency", value: incident.peakLatency > 0 ? `${incident.peakLatency}ms` : "—" },
+          { label: "Errors", value: incident.error_count.toLocaleString() },
+          { label: "Affected Requests", value: incident.affected_count.toLocaleString() },
+          { label: "Retries", value: incident.retry_count.toLocaleString() },
+          { label: "Fallbacks", value: incident.fallback_count.toLocaleString() },
         ].map(s => (
           <Card key={s.label} className="p-4">
             <div className="text-xs text-[var(--muted-foreground)] mb-1.5">{s.label}</div>
@@ -52,8 +159,7 @@ function IncidentDetail({ incident, onBack }: { incident: Incident; onBack: () =
         ))}
       </div>
 
-      <div className={`grid gap-5 ${showAI && ai ? "grid-cols-2 max-lg:grid-cols-1" : "grid-cols-1"}`}>
-        {/* Timeline */}
+      <div className="grid grid-cols-1 gap-5">
         <Card className="p-5">
           <div className="text-sm font-semibold text-[var(--foreground)] mb-4">Incident Timeline</div>
           <div className="flex flex-col gap-0">
@@ -61,21 +167,29 @@ function IncidentDetail({ incident, onBack }: { incident: Incident; onBack: () =
               <div key={i} className="flex gap-4">
                 <div className="flex flex-col items-center">
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${
-                    e.type === "detection" ? "bg-amber-500" :
-                    e.type === "action" ? "bg-[var(--primary)]" :
-                    e.type === "recovery" ? "bg-green-500" : "bg-[var(--muted-foreground)]"
+                    e.event_type === "detection" ? "bg-amber-500" :
+                    e.event_type === "action" ? "bg-[var(--primary)]" :
+                    e.event_type === "recovery" ? "bg-green-500" :
+                    e.event_type === "resolution" ? "bg-green-500" :
+                    "bg-[var(--muted-foreground)]"
                   }`} />
                   {i < incident.timeline.length - 1 && <div className="w-px flex-1 bg-[var(--border)] my-1" />}
                 </div>
                 <div className="pb-4 flex-1">
                   <div className="flex items-center gap-3">
-                    <span className="mono text-xs text-[var(--muted-foreground)] flex-shrink-0">{e.timestamp}</span>
+                    <span className="mono text-xs text-[var(--muted-foreground)] flex-shrink-0">
+                      {formatTimestamp(e.timestamp).split(", ")[1]}
+                    </span>
                     <span className="text-sm text-[var(--foreground)]">{e.event}</span>
                     <Badge
-                      variant={e.type === "detection" ? "warning" : e.type === "action" ? "info" : e.type === "recovery" ? "success" : "muted"}
+                      variant={
+                        e.event_type === "detection" ? "warning" :
+                        e.event_type === "action" ? "info" :
+                        e.event_type === "resolution" || e.event_type === "recovery" ? "success" : "muted"
+                      }
                       className="ml-auto flex-shrink-0 text-[10px]"
                     >
-                      {e.type}
+                      {e.event_type}
                     </Badge>
                   </div>
                 </div>
@@ -83,56 +197,6 @@ function IncidentDetail({ incident, onBack }: { incident: Incident; onBack: () =
             ))}
           </div>
         </Card>
-
-        {/* AI Analysis */}
-        {showAI && ai && (
-          <div className="flex flex-col gap-4 animate-fade-in">
-            <Card className="p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-6 h-6 rounded-md bg-[var(--accent)]/10 border border-[var(--accent)]/20 flex items-center justify-center">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/></svg>
-                </div>
-                <div className="text-sm font-semibold text-[var(--foreground)]">Incident Analysis</div>
-                <Badge variant="info" className="ml-auto">{ai.confidence}% confidence</Badge>
-              </div>
-
-              <p className="text-sm text-[var(--muted-foreground)] leading-relaxed mb-4">{ai.summary}</p>
-
-              <div className="flex flex-col gap-3">
-                <div>
-                  <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Observed Patterns</div>
-                  {ai.observedPatterns.map((p, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs text-[var(--foreground)] py-1">
-                      <span className="text-[var(--accent)] mt-px">•</span>{p}
-                    </div>
-                  ))}
-                </div>
-                <div className="pt-3 border-t border-[var(--border)]">
-                  <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Likely Cause</div>
-                  <p className="text-xs text-[var(--foreground)]">{ai.likelyCause}</p>
-                </div>
-                <div className="pt-3 border-t border-[var(--border)]">
-                  <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Actions Taken</div>
-                  {ai.actionsTaken.map((a, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs text-green-500 py-0.5">
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                      {a}
-                    </div>
-                  ))}
-                </div>
-                <div className="pt-3 border-t border-[var(--border)]">
-                  <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Recommendations</div>
-                  {ai.recommendations.map((r, i) => (
-                    <div key={i} className="flex items-start gap-2 text-xs py-1">
-                      <span className="text-amber-500 flex-shrink-0 mt-px">→</span>
-                      <span className="text-[var(--foreground)]">{r}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -140,8 +204,34 @@ function IncidentDetail({ incident, onBack }: { incident: Incident; onBack: () =
 
 export function Incidents() {
   const [selected, setSelected] = useState<Incident | null>(null);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [summary, setSummary] = useState<IncidentSummary | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  if (selected) return <IncidentDetail incident={selected} onBack={() => setSelected(null)} />;
+  const loadData = useCallback(async () => {
+    try {
+      const [incRes, sumRes] = await Promise.all([
+        fetchIncidents(),
+        fetchIncidentSummary(),
+      ]);
+      setIncidents(incRes.incidents);
+      setSummary(sumRes);
+    } catch (e) {
+      console.error("Failed to load incidents", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
+  }, [loadData]);
+
+  if (selected) {
+    return <IncidentDetail incident={selected} onBack={() => setSelected(null)} onUpdate={loadData} />;
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-fade-in">
@@ -150,47 +240,72 @@ export function Incidents() {
         description="Track, investigate, and resolve provider incidents."
         actions={
           <div className="flex items-center gap-2">
-            <Badge variant="error" dot>{INCIDENTS.filter(i => i.status !== "resolved").length} Active</Badge>
+            {summary && (
+              <Badge variant={summary.needs_attention > 0 ? "error" : "success"} dot>
+                {summary.needs_attention} Needs Attention
+              </Badge>
+            )}
           </div>
         }
       />
 
-      <div className="flex flex-col gap-3">
-        {INCIDENTS.map(inc => (
-          <Card
-            key={inc.id}
-            className="p-5 cursor-pointer hover:border-[var(--accent)]/30 transition-colors"
-            onClick={() => setSelected(inc)}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="mono text-xs text-[var(--muted-foreground)]">{inc.id}</span>
-                  <Badge variant={severityVariant(inc.severity) as "error" | "warning" | "info" | "muted"}>{inc.severity.toUpperCase()}</Badge>
-                  <Badge variant={inc.status === "resolved" ? "success" : inc.status === "mitigating" ? "warning" : "error"}>
-                    {inc.status.charAt(0).toUpperCase() + inc.status.slice(1)}
-                  </Badge>
-                </div>
-                <div className="text-sm font-semibold text-[var(--foreground)] mb-1">{inc.title}</div>
-                <div className="text-xs text-[var(--muted-foreground)]">{inc.provider} · {inc.started}</div>
-              </div>
-              <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                {inc.duration && <span className="mono text-xs text-[var(--muted-foreground)]">{inc.duration}</span>}
-                <div className="grid grid-cols-2 gap-4 text-right">
-                  <div>
-                    <div className="mono text-sm font-semibold text-[var(--foreground)]">{inc.affectedRequests.toLocaleString()}</div>
-                    <div className="text-[10px] text-[var(--muted-foreground)]">affected</div>
+      {loading && incidents.length === 0 ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : incidents.length === 0 ? (
+        <Card className="p-12 flex flex-col items-center justify-center text-center">
+          <svg className="w-12 h-12 text-[var(--muted-foreground)] mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="text-lg font-medium text-[var(--foreground)]">No Incidents</div>
+          <div className="text-sm text-[var(--muted-foreground)] mt-1">
+            All systems are running smoothly.
+          </div>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {incidents.map(inc => (
+            <Card
+              key={inc.incident_id}
+              className="p-5 cursor-pointer hover:border-[var(--accent)]/30 transition-colors"
+              onClick={() => setSelected(inc)}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="mono text-xs text-[var(--muted-foreground)]">{inc.incident_id}</span>
+                    <Badge variant={severityVariant(inc.severity) as any}>{inc.severity.toUpperCase()}</Badge>
+                    <Badge variant={statusVariant(inc.status) as any}>
+                      {inc.status.charAt(0).toUpperCase() + inc.status.slice(1)}
+                    </Badge>
+                    {inc.fault_injected && <Badge variant="muted" dot>FAULT</Badge>}
                   </div>
-                  <div>
-                    <div className="mono text-sm font-semibold text-red-400">{inc.failureRate}%</div>
-                    <div className="text-[10px] text-[var(--muted-foreground)]">failure rate</div>
+                  <div className="text-sm font-semibold text-[var(--foreground)] mb-1">{inc.title}</div>
+                  <div className="text-xs text-[var(--muted-foreground)]">
+                    {inc.provider_display_name} · {formatRelativeTime(inc.started_at)}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                  {inc.duration_seconds !== null && (
+                    <span className="mono text-xs text-[var(--muted-foreground)]">{inc.duration_seconds}s</span>
+                  )}
+                  <div className="grid grid-cols-2 gap-4 text-right">
+                    <div>
+                      <div className="mono text-sm font-semibold text-[var(--foreground)]">{inc.affected_count.toLocaleString()}</div>
+                      <div className="text-[10px] text-[var(--muted-foreground)]">affected</div>
+                    </div>
+                    <div>
+                      <div className="mono text-sm font-semibold text-red-400">{inc.error_count.toLocaleString()}</div>
+                      <div className="text-[10px] text-[var(--muted-foreground)]">errors</div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

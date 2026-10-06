@@ -13,8 +13,6 @@ import { CircuitBreakers } from "./pages/CircuitBreakers";
 import { FaultInjection } from "./pages/FaultInjection";
 import { Incidents } from "./pages/Incidents";
 import { Copilot } from "./pages/Copilot";
-import { ApiKeys } from "./pages/ApiKeys";
-import { Settings } from "./pages/Settings";
 
 type Theme = "light" | "dark";
 
@@ -36,7 +34,7 @@ function useTheme() {
     }
     try {
       localStorage.setItem("ng-theme", theme);
-    } catch {}
+    } catch { }
   }, [theme]);
 
   return [theme, setTheme] as const;
@@ -74,8 +72,6 @@ export default function App() {
       case "fault-injection": return <FaultInjection />;
       case "incidents": return <Incidents />;
       case "copilot": return <Copilot />;
-      case "api-keys": return <ApiKeys />;
-      case "settings": return <Settings theme={theme} onThemeChange={handleThemeChange} />;
       default: return <Dashboard />;
     }
   }

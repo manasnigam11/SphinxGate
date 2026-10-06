@@ -1,8 +1,11 @@
 """
 Pydantic models for the SphinxGate API.
 
-These mirror the OpenAI chat completion request/response shape so the frontend
-can talk to SphinxGate exactly as it would talk to OpenAI.
+Phase 2.5 additions:
+  - PublicAPIRequest  — request model for non-LLM provider calls.
+  - PublicAPIResponse — normalized response for weather/joke/currency/trivia.
+
+Existing LLM models are unchanged so the frontend Playground keeps working.
 """
 
 from typing import Any, Literal, Optional, Union
@@ -79,3 +82,36 @@ class GatewayMeta(BaseModel):
 
 class GatewayError(BaseModel):
     error: dict[str, Any]
+
+
+# ── Public API request / response ─────────────────────────────────────────────
+# Used by the POST /api/v1/query endpoint for non-LLM providers.
+
+class PublicAPIRequest(BaseModel):
+    """
+    Generic request for public (key-free) API providers.
+
+    The 'params' dict is forwarded verbatim to the adapter — each provider
+    documents its own supported keys in its adapter module.
+    """
+    provider: str                        # e.g. "open_meteo", "jokeapi"
+    params: dict[str, Any] = {}         # provider-specific query parameters
+    model_config = {"extra": "ignore"}
+
+
+class PublicAPIResponse(BaseModel):
+    """
+    Normalized SphinxGate response for public API providers.
+
+    This is the shape the /api/v1/query endpoint returns.
+    Consumers don't need to understand the upstream API's exact shape.
+    """
+    provider: str                        # slug of the provider that served the response
+    display_name: str                    # human-readable provider name
+    category: str                        # "public_api"
+    data: dict[str, Any]                 # the normalized upstream payload
+    request_id: str
+    latency_ms: int
+    circuit_state: str = "closed"
+    retry_count: int = 0
+    fallback_used: bool = False

@@ -63,6 +63,12 @@ backend/htmlcov/
 backend/.coverage
 backend/coverage.xml
 
+# ── Backend Runtime Data (Telemetry/Incidents) ──────────────────────────────
+backend/data/*.json
+backend/data/*.jsonl
+!backend/data/.gitkeep
+backend/incidents_dump.json
+
 # ── Node / frontend ───────────────────────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/

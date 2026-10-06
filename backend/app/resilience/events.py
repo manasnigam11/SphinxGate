@@ -28,6 +28,7 @@ RATE_LIMIT_REJECTED   = "rate_limit_rejected"
 TIMEOUT_OCCURRED      = "timeout_occurred"
 PROVIDER_FAILURE      = "provider_failure"
 REQUEST_SUCCEEDED     = "request_succeeded"
+DEGRADED_RESPONSE_SERVED = "degraded_response_served"   # Phase 5
 
 
 @dataclass
@@ -70,6 +71,9 @@ class RequestResult:
     # Error detail (only populated when success=False)
     error_type: Optional[str] = None
     error_message: Optional[str] = None
+    # Phase 5 — the last *real* failure kind behind a generic error_type such as
+    # "no_healthy_provider" (e.g. "timeout", "rate_limited", "circuit_open").
+    underlying_failure_kind: Optional[str] = None
 
     # Events emitted during this request lifecycle (for Phase 3)
     events: list[ResilienceEvent] = field(default_factory=list)

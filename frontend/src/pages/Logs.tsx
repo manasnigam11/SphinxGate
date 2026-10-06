@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Badge, Button, Card, Input, SectionHeader, CodeBlock } from "../components/ui";
-import { LOGS } from "../data/mock";
+import { fetchRecentRequests, TelemetryRequest } from "../api";
 import type { LogEntry, LogLevel } from "../types";
 
 const LEVEL_VARIANT: Record<LogLevel, "success" | "warning" | "error" | "muted"> = {
@@ -17,6 +17,45 @@ const LEVEL_COLOR: Record<LogLevel, string> = {
   debug: "text-[var(--muted-foreground)]",
 };
 
+function mapToLogEntry(req: TelemetryRequest): LogEntry {
+  let level: LogLevel = "info";
+  if (!req.success) {
+    level = "error";
+  } else if (req.fallback_used || req.retry_count > 0 || req.circuit_state !== "closed") {
+    level = "warn";
+  }
+
+  const d = new Date(req.timestamp_iso);
+  const timeStr = isNaN(d.getTime()) ? req.timestamp_iso : d.toISOString().replace("T", " ").substring(0, 19);
+
+  let lifecycleStr = `HTTP ${req.status_code} ${req.endpoint}`;
+  if (req.events && req.events.length > 0) {
+    const steps = req.events.map(e => {
+      if (e.event_type === "request_started") return "Started";
+      if (e.event_type === "request_failed") return `Failed (${e.provider_slug})`;
+      if (e.event_type === "retry_attempted") return `Retry (${e.provider_slug})`;
+      if (e.event_type === "fallback_attempted") return `Fallback (${e.provider_slug})`;
+      if (e.event_type === "request_succeeded") return `Success (${e.provider_slug})`;
+      return e.event_type;
+    });
+    lifecycleStr = steps.join(" → ");
+  }
+
+  return {
+    id: req.request_id,
+    timestamp: timeStr,
+    level,
+    service: "gateway",
+    event: lifecycleStr,
+    requestId: req.request_id,
+    provider: req.provider_display_name,
+    latencyMs: Math.round(req.latency_ms),
+    retryCount: req.retry_count,
+    message: req.error_message || (req.cache_hit ? "Served from cache" : undefined),
+    data: req as any,
+  };
+}
+
 function LogDetail({ log, onClose }: { log: LogEntry; onClose: () => void }) {
   const json = JSON.stringify({
     timestamp: log.timestamp,
@@ -28,6 +67,7 @@ function LogDetail({ log, onClose }: { log: LogEntry; onClose: () => void }) {
     ...(log.latencyMs !== undefined ? { latency_ms: log.latencyMs } : {}),
     ...(log.retryCount !== undefined ? { retry_count: log.retryCount } : {}),
     ...(log.message ? { message: log.message } : {}),
+    raw_data: log.data,
   }, null, 2);
 
   return (
@@ -78,9 +118,18 @@ export function Logs() {
   const [search, setSearch] = useState("");
   const [levelFilter, setLevelFilter] = useState<string>("all");
   const [selected, setSelected] = useState<LogEntry | null>(null);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
-  const filtered = LOGS.filter(l => {
-    const matchSearch = !search || l.event.includes(search) || l.requestId.includes(search) || l.provider.toLowerCase().includes(search.toLowerCase());
+  useEffect(() => {
+    fetchRecentRequests(100).then(data => {
+      setLogs(data.requests.map(mapToLogEntry));
+    }).catch(err => {
+      console.error("Failed to fetch logs:", err);
+    });
+  }, []);
+
+  const filtered = logs.filter(l => {
+    const matchSearch = !search || l.event.toLowerCase().includes(search.toLowerCase()) || l.requestId.includes(search) || l.provider.toLowerCase().includes(search.toLowerCase());
     const matchLevel = levelFilter === "all" || l.level === levelFilter;
     return matchSearch && matchLevel;
   });
@@ -91,9 +140,11 @@ export function Logs() {
         title="Logs"
         description="Structured log stream across all gateway services and providers."
         actions={
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={() => {
+            fetchRecentRequests(100).then(data => setLogs(data.requests.map(mapToLogEntry)));
+          }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-            Live Stream
+            Refresh Logs
           </Button>
         }
       />

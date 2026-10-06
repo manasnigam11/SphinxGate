@@ -22,8 +22,6 @@ const PAGE_LABELS: Record<string, string> = {
   "fault-injection": "Fault Injection",
   copilot: "AI Copilot",
   incidents: "Incidents",
-  "api-keys": "API Keys",
-  settings: "Settings",
 };
 
 const SECTION: Record<string, string> = {
@@ -39,8 +37,6 @@ const SECTION: Record<string, string> = {
   "fault-injection": "Resilience",
   copilot: "AI Engineering",
   incidents: "AI Engineering",
-  "api-keys": "Management",
-  settings: "Management",
 };
 
 export function Navbar({ page, theme, onThemeToggle, environment, onEnvironmentChange }: NavbarProps) {
@@ -65,23 +61,11 @@ export function Navbar({ page, theme, onThemeToggle, environment, onEnvironmentC
         </div>
 
         {/* Environment */}
-        <select
-          value={environment}
-          onChange={e => onEnvironmentChange(e.target.value)}
-          className="bg-[var(--secondary)] border border-[var(--border)] rounded-[var(--radius)] px-2.5 py-1.5 text-xs text-[var(--foreground)] cursor-pointer focus:outline-none focus:border-[var(--primary)]"
-        >
-          <option value="production">Production</option>
-          <option value="staging">Staging</option>
-          <option value="development">Development</option>
-        </select>
+        <div className="bg-[var(--secondary)] border border-[var(--border)] rounded-[var(--radius)] px-2.5 py-1.5 text-xs text-[var(--foreground)] opacity-80 cursor-default">
+          Production
+        </div>
 
-        {/* Notifications */}
-        <button className="relative p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--secondary)] rounded-[var(--radius)] transition-colors cursor-pointer">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-          <Badge variant="error" className="absolute -top-0.5 -right-0.5 !px-1 !py-0 !text-[9px] min-w-[14px] justify-center">2</Badge>
-        </button>
+
 
         {/* Theme toggle */}
         <button
@@ -103,10 +87,7 @@ export function Navbar({ page, theme, onThemeToggle, environment, onEnvironmentC
           )}
         </button>
 
-        {/* Avatar */}
-        <div className="w-7 h-7 rounded-full bg-[var(--primary)] flex items-center justify-center cursor-pointer">
-          <span className="text-white text-[10px] font-bold">AK</span>
-        </div>
+
       </div>
     </header>
   );

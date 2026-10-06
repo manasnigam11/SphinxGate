@@ -41,8 +41,9 @@ from typing import Any, Optional
 
 import httpx
 
-from app.providers.base import BaseProvider
+from app.providers.base import BaseProvider, InvalidProviderRequest
 from app.providers.registry import get_provider
+from app.security.redaction import sanitize_exception
 from app.resilience.circuit_breaker import CircuitBreakerRegistry, CircuitState
 from app.resilience.classifier import (
     FailureKind,
@@ -146,6 +147,8 @@ class ResilienceEngine:
         # ── 3. Try each provider in the chain ─────────────────────────────────
         fallback_used = False
         overall_start = time.perf_counter()
+        last_real_failure: Optional[str] = None   # last upstream failure kind seen
+        skipped_reason: Optional[str] = None      # circuit_open / not_configured
 
         for chain_index, slug in enumerate(provider_chain):
             if chain_index > 0:
@@ -171,8 +174,11 @@ class ResilienceEngine:
 
             # ── 3b. Check API key ──────────────────────────────────────────────
             api_key = api_key_getter(slug)
-            if not api_key:
+            # Only skip if the provider *requires* a key and none is configured.
+            # Public API providers (requires_api_key=False) pass through with api_key=None.
+            if provider.requires_api_key and not api_key:
                 logger.warning("[%s] No API key for %s — skipping", request_id, slug)
+                skipped_reason = skipped_reason or "not_configured"
                 continue
 
             # ── 3c. Circuit breaker check ──────────────────────────────────────
@@ -191,9 +197,22 @@ class ResilienceEngine:
                     "[%s] circuit OPEN for %s — skipping provider",
                     request_id, slug,
                 )
+                skipped_reason = "circuit_open"
                 continue  # Try next in chain
 
-            # ── 3d. Retry loop for this provider ──────────────────────────────
+            # ── 3d. Active Health Check ─────────────────────────────────────────
+            from app.health.checker import get_health_registry, ActiveHealthState
+            health_state = get_health_registry().get_state(slug)
+            if health_state == ActiveHealthState.UNHEALTHY and not half_open_entered:
+                logger.info(
+                    "[%s] active health UNHEALTHY for %s — skipping provider",
+                    request_id, slug,
+                )
+                skipped_reason = "unhealthy"
+                continue
+
+            # ── 3e. Retry loop for this provider ──────────────────────────────
+            outcome: dict[str, Any] = {}
             result = await self._attempt_with_retries(
                 request_id=request_id,
                 provider=provider,
@@ -202,10 +221,42 @@ class ResilienceEngine:
                 api_key=api_key,
                 cb=cb,
                 events=events,
+                outcome=outcome,
             )
+
+            # A recovery probe that ended without a verdict must not leave the
+            # breaker stuck in HALF-OPEN (allow_request() blocks while HALF-OPEN).
+            if result is None and cb.state == CircuitState.HALF_OPEN:
+                await cb.abort_probe("probe inconclusive (non-circuit failure)")
+
+            # The caller's request was malformed — not an upstream failure.
+            if result is None and outcome.get("invalid_request"):
+                return RequestResult(
+                    success=False,
+                    response=None,
+                    request_id=request_id,
+                    provider_slug=slug,
+                    provider_display_name=provider.display_name,
+                    latency_ms=int((time.perf_counter() - overall_start) * 1000),
+                    retry_count=0,
+                    circuit_state=cb.state.value,
+                    fallback_used=fallback_used,
+                    status_code=400,
+                    tokens_used=0,
+                    error_type="invalid_request",
+                    error_message=outcome["invalid_request"],
+                    underlying_failure_kind="invalid_request",
+                    events=events,
+                )
+
+            if result is None and outcome.get("failure_kind"):
+                last_real_failure = outcome["failure_kind"]
 
             if result is not None:
                 # Success
+                from app.health.checker import get_health_registry
+                get_health_registry().record_passive(slug, True)
+
                 elapsed_ms = int((time.perf_counter() - overall_start) * 1000)
                 if chain_index > 0:
                     events.append(ResilienceEvent(
@@ -274,6 +325,7 @@ class ResilienceEngine:
                 "No healthy provider is currently available. "
                 f"Tried: {', '.join(provider_chain)}."
             ),
+            underlying_failure_kind=last_real_failure or skipped_reason,
             events=events,
         )
 
@@ -308,21 +360,25 @@ class ResilienceEngine:
         api_key: str,
         cb,          # CircuitBreaker
         events: list[ResilienceEvent],
+        outcome: Optional[dict[str, Any]] = None,
     ) -> Optional[dict[str, Any]]:
         """
         Try calling a provider up to (1 + max_retries) times.
 
         Returns the successful response dict, or None if all attempts failed.
         """
+        if outcome is None:
+            outcome = {}
         max_attempts = 1 + (self._policy.max_retries if self._policy.retry_enabled else 0)
         attempt = 0
 
         while attempt < max_attempts:
             attempt_start = time.perf_counter()
             try:
+                provider_timeout = provider.timeout_override if getattr(provider, "timeout_override", None) else self._policy.request_timeout_seconds
                 result = await asyncio.wait_for(
-                    provider.chat_completion(payload, api_key),
-                    timeout=self._policy.request_timeout_seconds,
+                    provider.call(payload, api_key),
+                    timeout=provider_timeout,
                 )
                 # Success — reset circuit breaker.
                 prev_state = cb.state
@@ -336,19 +392,31 @@ class ResilienceEngine:
                     ))
                 return result
 
+            except asyncio.CancelledError:
+                # The client went away mid-probe — don't strand the breaker.
+                if cb.state == CircuitState.HALF_OPEN:
+                    await cb.abort_probe("probe cancelled")
+                raise
+
+            except InvalidProviderRequest as exc:
+                outcome["invalid_request"] = sanitize_exception(exc)
+                logger.info("[%s] provider=%s rejected request as invalid", request_id, slug)
+                return None
+
             except asyncio.TimeoutError:
                 failure_kind = FailureKind.TIMEOUT
                 error_body = None
+                timeout_val = provider.timeout_override if getattr(provider, "timeout_override", None) else self._policy.request_timeout_seconds
                 logger.warning(
                     "[%s] attempt %d/%d provider=%s TIMEOUT (%.1fs)",
                     request_id, attempt + 1, max_attempts, slug,
-                    self._policy.request_timeout_seconds,
+                    timeout_val,
                 )
                 events.append(ResilienceEvent(
                     event_type=TIMEOUT_OCCURRED,
                     request_id=request_id,
                     provider_slug=slug,
-                    data={"attempt": attempt + 1, "timeout_seconds": self._policy.request_timeout_seconds},
+                    data={"attempt": attempt + 1, "timeout_seconds": timeout_val},
                 ))
 
             except httpx.HTTPStatusError as exc:
@@ -379,7 +447,7 @@ class ResilienceEngine:
                 logger.warning(
                     "[%s] attempt %d/%d provider=%s network error kind=%s: %s",
                     request_id, attempt + 1, max_attempts, slug,
-                    failure_kind.value, exc,
+                    failure_kind.value, sanitize_exception(exc),
                 )
                 events.append(ResilienceEvent(
                     event_type=PROVIDER_FAILURE,
@@ -399,10 +467,27 @@ class ResilienceEngine:
                     event_type=PROVIDER_FAILURE,
                     request_id=request_id,
                     provider_slug=slug,
-                    data={"attempt": attempt + 1, "failure_kind": failure_kind.value, "error": str(exc)},
+                    data={
+                        "attempt": attempt + 1,
+                        "failure_kind": failure_kind.value,
+                        "error": sanitize_exception(exc),
+                    },
                 ))
 
             # ── Post-failure handling ──────────────────────────────────────────
+            outcome["failure_kind"] = failure_kind.value
+
+            from app.health.checker import get_health_registry
+            
+            # Only degrade the provider if it's a genuine upstream failure or quota exhaustion.
+            # Client errors (4xx) should not falsely degrade a healthy provider.
+            if counts_toward_circuit(failure_kind) or failure_kind == FailureKind.QUOTA_EXHAUSTED:
+                reason = failure_kind.value
+                if failure_kind == FailureKind.QUOTA_EXHAUSTED:
+                    reason = "Quota exhausted / Rate limited"
+                elif failure_kind == FailureKind.TIMEOUT:
+                    reason = "Timeout"
+                get_health_registry().record_passive(slug, False, reason=reason)
 
             # Update circuit breaker if this failure counts.
             if counts_toward_circuit(failure_kind):
@@ -484,6 +569,15 @@ class ResilienceEngine:
     def get_circuit_snapshots(self) -> list[dict]:
         """Return state snapshots for all known circuit breakers."""
         return self._circuit_breakers.get_all_snapshots()
+
+    def default_circuit_snapshot(self, provider_slug: str) -> dict:
+        """Closed-state snapshot for a provider that has had no traffic yet."""
+        return self._circuit_breakers.default_snapshot(provider_slug)
+
+    def get_all_circuit_snapshots(self, provider_slugs: list[str]) -> list[dict]:
+        """Snapshots for every given provider (closed defaults if never used)."""
+        known = {s["provider"]: s for s in self.get_circuit_snapshots()}
+        return [known.get(slug) or self.default_circuit_snapshot(slug) for slug in provider_slugs]
 
     @property
     def policy(self) -> ResiliencePolicy:

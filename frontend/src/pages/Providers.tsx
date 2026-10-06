@@ -1,10 +1,32 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Badge, Button, Card, StatusIndicator, SectionHeader } from "../components/ui";
-import { PROVIDERS } from "../data/mock";
+import { fetchProviderHealth, ProviderHealthEntry } from "../api";
 import type { Provider } from "../types";
 
+// Map ProviderHealthEntry to the UI's Provider format
+function mapToProvider(h: ProviderHealthEntry): Provider {
+  const stats = h.recent_stats || {};
+  const totalReq = stats.total_requests || 0;
+  const succReq = stats.successful_requests || 0;
+  
+  return {
+    id: h.slug,
+    name: h.display_name,
+    slug: h.slug,
+    status: h.health_status,
+    latency: Math.round(stats.avg_latency_ms || 0),
+    successRate: totalReq > 0 ? Math.round((succReq / totalReq) * 100) : 0,
+    requests: totalReq,
+    errors: totalReq - succReq,
+    lastHealthCheck: "live",
+    models: [],
+    circuitState: h.circuit_state as any,
+    availability: h.health_status === "healthy" ? 100 : (h.health_status === "degraded" ? 95 : 0)
+  };
+}
+
 function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () => void }) {
-  const statusVariant = provider.status === "healthy" ? "success" : provider.status === "degraded" ? "warning" : "error";
+  const statusVariant = provider.status === "healthy" ? "success" : provider.status === "degraded" ? "warning" : provider.status === "unknown" ? "muted" : "error";
   const circuitVariant = provider.circuitState === "closed" ? "success" : provider.circuitState === "half-open" ? "warning" : "error";
 
   return (
@@ -29,7 +51,7 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
           { label: "Total Requests", value: provider.requests.toLocaleString(), mono: true },
           { label: "Success Rate", value: provider.status === "down" ? "—" : `${provider.successRate}%`, mono: true },
           { label: "Avg Latency", value: provider.status === "down" ? "—" : `${provider.latency}ms`, mono: true },
-          { label: "Availability", value: `${provider.availability}%`, mono: true },
+          { label: "Availability", value: provider.status === "unknown" ? "—" : `${provider.availability}%`, mono: true },
         ].map(s => (
           <Card key={s.label} className="p-4">
             <div className="text-xs text-[var(--muted-foreground)] mb-1.5">{s.label}</div>
@@ -51,16 +73,24 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
               </tr>
             </thead>
             <tbody>
-              {provider.models.map(m => (
-                <tr key={m.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--secondary)] transition-colors">
-                  <td className="px-4 py-3 mono text-xs font-medium text-[var(--foreground)]">{m.name}</td>
-                  <td className="px-4 py-3 mono text-xs text-[var(--muted-foreground)]">{(m.contextWindow / 1000).toFixed(0)}k</td>
-                  <td className="px-4 py-3 mono text-xs text-[var(--foreground)]">${m.inputCost}</td>
-                  <td className="px-4 py-3 mono text-xs text-[var(--foreground)]">${m.outputCost || "—"}</td>
-                  <td className="px-4 py-3"><Badge variant={m.status === "healthy" ? "success" : m.status === "degraded" ? "warning" : "error"}>{m.status}</Badge></td>
-                  <td className="px-4 py-3 mono text-xs text-[var(--foreground)]">{m.latency > 0 ? `${m.latency}ms` : "—"}</td>
+              {provider.models.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-[var(--muted-foreground)]">
+                    No models configured for this provider.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                provider.models.map(m => (
+                  <tr key={m.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--secondary)] transition-colors">
+                    <td className="px-4 py-3 mono text-xs font-medium text-[var(--foreground)]">{m.name}</td>
+                    <td className="px-4 py-3 mono text-xs text-[var(--muted-foreground)]">{(m.contextWindow / 1000).toFixed(0)}k</td>
+                    <td className="px-4 py-3 mono text-xs text-[var(--foreground)]">${m.inputCost}</td>
+                    <td className="px-4 py-3 mono text-xs text-[var(--foreground)]">${m.outputCost || "—"}</td>
+                    <td className="px-4 py-3"><Badge variant={m.status === "healthy" ? "success" : m.status === "degraded" ? "warning" : "error"}>{m.status}</Badge></td>
+                    <td className="px-4 py-3 mono text-xs text-[var(--foreground)]">{m.latency > 0 ? `${m.latency}ms` : "—"}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </Card>
@@ -96,12 +126,21 @@ function ProviderDetail({ provider, onBack }: { provider: Provider; onBack: () =
 
 export function Providers() {
   const [selected, setSelected] = useState<Provider | null>(null);
+  const [providers, setProviders] = useState<Provider[]>([]);
+
+  useEffect(() => {
+    fetchProviderHealth().then(data => {
+      setProviders(data.providers.map(mapToProvider));
+    }).catch(err => {
+      console.error("Failed to load providers:", err);
+    });
+  }, []);
 
   if (selected) {
     return <ProviderDetail provider={selected} onBack={() => setSelected(null)} />;
   }
 
-  const statusVariant = (s: string) => s === "healthy" ? "success" : s === "degraded" ? "warning" : "error";
+  const statusVariant = (s: string) => s === "healthy" ? "success" : s === "degraded" ? "warning" : s === "unknown" ? "muted" : "error";
   const circuitVariant = (s: string) => s === "closed" ? "success" : s === "half-open" ? "warning" : "error";
 
   return (
@@ -110,15 +149,14 @@ export function Providers() {
         title="Providers"
         description="Manage connected AI providers, inspect model availability, and configure routing."
         actions={
-          <Button variant="primary" size="sm">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Provider
-          </Button>
+          <div className="text-xs text-[var(--muted-foreground)]">
+            Providers are managed via code registry
+          </div>
         }
       />
 
       <div className="grid grid-cols-2 gap-4 max-xl:grid-cols-1">
-        {PROVIDERS.map(p => (
+        {providers.map(p => (
           <Card key={p.id} className="p-5 cursor-pointer hover:border-[var(--accent)]/40 transition-colors" onClick={() => setSelected(p)}>
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -133,7 +171,7 @@ export function Providers() {
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <Badge variant={statusVariant(p.status) as "success" | "warning" | "error"} dot>{p.status}</Badge>
+                <Badge variant={statusVariant(p.status) as "success" | "warning" | "error" | "muted"} dot>{p.status}</Badge>
                 <Badge variant={circuitVariant(p.circuitState) as "success" | "warning" | "error"} className="mono text-[10px]">
                   {p.circuitState.toUpperCase()}
                 </Badge>
@@ -142,7 +180,7 @@ export function Providers() {
 
             <div className="grid grid-cols-4 gap-3">
               {[
-                { label: "Requests", value: p.requests > 0 ? (p.requests / 1000).toFixed(0) + "k" : "—" },
+                { label: "Requests", value: p.requests > 0 ? p.requests.toLocaleString() : "—" },
                 { label: "Success", value: p.status === "down" ? "—" : p.successRate + "%" },
                 { label: "Latency", value: p.status === "down" ? "—" : p.latency + "ms" },
                 { label: "Models", value: String(p.models.length) },
@@ -164,3 +202,4 @@ export function Providers() {
     </div>
   );
 }
+

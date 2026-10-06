@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Badge, Button, Card, CodeBlock, Select, Tabs, SectionHeader } from "../components/ui";
+import { fetchProviders } from "../api";
 
 // The SphinxGate backend URL. In development the Vite proxy (see vite.config.ts)
 // will forward /api/* requests to http://localhost:8000.
@@ -21,11 +22,28 @@ const DEFAULT_BODY = `{
   "temperature": 0.7
 }`;
 
-// Provider options that map to slugs the gateway understands.
-// In Phase 2 this list will be fetched from GET /api/providers.
-const PROVIDER_OPTIONS = [
+const FALLBACK_LLM_PROVIDERS = [
   { value: "openai", label: "OpenAI" },
+  { value: "gemini", label: "Google Gemini" },
+  { value: "groq",   label: "Groq" },
 ];
+
+const FALLBACK_PUBLIC_API_PROVIDERS = [
+  { value: "open_meteo",  label: "Open-Meteo (Weather)" },
+  { value: "jokeapi",     label: "JokeAPI" },
+  { value: "frankfurter", label: "Frankfurter (Currency)" },
+  { value: "trivia",      label: "Open Trivia DB" },
+];
+
+// Default public API params for each provider (for the textarea)
+const DEFAULT_PUBLIC_PARAMS: Record<string, string> = {
+  open_meteo:  JSON.stringify({ latitude: 51.5074, longitude: -0.1278 }, null, 2),
+  jokeapi:     JSON.stringify({ category: "Programming", safe_mode: true }, null, 2),
+  frankfurter: JSON.stringify({ base: "USD", to: "EUR,GBP,JPY" }, null, 2),
+  trivia:      JSON.stringify({ amount: 3, difficulty: "easy", type: "multiple" }, null, 2),
+};
+
+type ProviderMode = "llm" | "public_api";
 
 type ReqState = "idle" | "loading" | "success" | "timeout" | "rate_limited" | "error";
 
@@ -59,11 +77,40 @@ export function Playground() {
   const [method] = useState("POST");
   const [endpoint, setEndpoint] = useState("/api/v1/chat/completions");
   const [provider, setProvider] = useState("openai");
+  const [providerMode, setProviderMode] = useState<ProviderMode>("llm");
   const [body, setBody] = useState(DEFAULT_BODY);
   const [activeTab, setActiveTab] = useState("Response");
   const [reqState, setReqState] = useState<ReqState>("idle");
   const [result, setResult] = useState<RequestResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [llmProviders, setLlmProviders] = useState(FALLBACK_LLM_PROVIDERS);
+  const [publicProviders, setPublicProviders] = useState(FALLBACK_PUBLIC_API_PROVIDERS);
+  const allProviders = [...llmProviders, ...publicProviders];
+
+  useEffect(() => {
+    fetchProviders().then(res => {
+      const providers = res.providers as any[];
+      const llms = providers.filter(p => p.category === "llm").map(p => ({ value: p.slug, label: p.display_name }));
+      const publics = providers.filter(p => p.category === "public_api").map(p => ({ value: p.slug, label: p.display_name }));
+      if (llms.length > 0) setLlmProviders(llms);
+      if (publics.length > 0) setPublicProviders(publics);
+    }).catch(console.error);
+  }, []);
+
+  function handleProviderChange(slug: string) {
+    setProvider(slug);
+    const isPublic = publicProviders.some(p => p.value === slug);
+    if (isPublic) {
+      setProviderMode("public_api");
+      setEndpoint("/api/v1/query");
+      setBody(DEFAULT_PUBLIC_PARAMS[slug] ?? "{}");
+    } else {
+      setProviderMode("llm");
+      setEndpoint("/api/v1/chat/completions");
+      setBody(DEFAULT_BODY);
+    }
+  }
 
   // Displayed in the request config panel — never sent to the backend.
   const displayHeaders: [string, string][] = [
@@ -76,27 +123,49 @@ export function Playground() {
     setResult(null);
     setErrorMessage(null);
 
-    // Validate JSON before sending.
-    let parsedBody: unknown;
-    try {
-      parsedBody = JSON.parse(body);
-    } catch {
-      setReqState("error");
-      setErrorMessage("Request body is not valid JSON.");
-      return;
-    }
-
     const startTime = performance.now();
 
     try {
-      const response = await fetch(`${GATEWAY_BASE}${endpoint}`, {
-        method: "POST",
-        headers: {
+      let fetchBody: string;
+      let fetchHeaders: Record<string, string>;
+
+      if (providerMode === "public_api") {
+        // Public API mode: wrap params in { provider, params } envelope
+        let parsedParams: unknown;
+        try {
+          parsedParams = JSON.parse(body);
+        } catch {
+          setReqState("error");
+          setErrorMessage("Request params are not valid JSON.");
+          return;
+        }
+        fetchBody = JSON.stringify({ provider, params: parsedParams });
+        fetchHeaders = {
+          "Content-Type": "application/json",
+          "X-Environment": "development",
+        };
+      } else {
+        // LLM mode: validate JSON and send with X-Provider header
+        let parsedBody: unknown;
+        try {
+          parsedBody = JSON.parse(body);
+        } catch {
+          setReqState("error");
+          setErrorMessage("Request body is not valid JSON.");
+          return;
+        }
+        fetchBody = JSON.stringify(parsedBody);
+        fetchHeaders = {
           "Content-Type": "application/json",
           "X-Provider": provider,
           "X-Environment": "development",
-        },
-        body: JSON.stringify(parsedBody),
+        };
+      }
+
+      const response = await fetch(`${GATEWAY_BASE}${endpoint}`, {
+        method: "POST",
+        headers: fetchHeaders,
+        body: fetchBody,
       });
 
       const latencyMs = Math.round(performance.now() - startTime);
@@ -230,9 +299,14 @@ export function Playground() {
           <Select
             label="Provider"
             value={provider}
-            onChange={e => setProvider(e.target.value)}
-            options={PROVIDER_OPTIONS}
+            onChange={e => handleProviderChange(e.target.value)}
+            options={allProviders}
           />
+          {providerMode === "public_api" && (
+            <div className="text-xs text-[var(--muted-foreground)] bg-[var(--secondary)] rounded-[var(--radius)] px-3 py-2 border border-[var(--border)]">
+              🌐 Public API — no key required. Params will be sent to <span className="mono">/api/v1/query</span>.
+            </div>
+          )}
 
           {/* Display headers (informational only) */}
           <div>
@@ -275,7 +349,7 @@ export function Playground() {
         </Card>
 
         {/* ── Response panel ─────────────────────────────────────────────── */}
-        <Card className="flex flex-col overflow-hidden">
+        <Card className="flex flex-col overflow-hidden max-h-[650px]">
           {/* Meta bar — shown after a real response */}
           {result && (
             <div className="flex items-center gap-4 px-5 py-3 border-b border-[var(--border)] bg-[var(--secondary)]">
@@ -300,7 +374,7 @@ export function Playground() {
           {reqState === "loading" && (
             <div className="flex items-center gap-3 px-5 py-3 border-b border-[var(--border)] bg-[var(--secondary)]">
               <svg className="animate-spin w-3.5 h-3.5 text-[var(--accent)]" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-              <span className="text-xs text-[var(--muted-foreground)]">Routing to {PROVIDER_OPTIONS.find(p => p.value === provider)?.label ?? provider}...</span>
+              <span className="text-xs text-[var(--muted-foreground)]">Routing to {allProviders.find(p => p.value === provider)?.label ?? provider}...</span>
             </div>
           )}
 

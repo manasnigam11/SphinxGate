@@ -1,17 +1,34 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Badge, Button, Card, SectionHeader } from "../components/ui";
-import { INCIDENTS } from "../data/mock";
-import type { Incident } from "../types";
+import { fetchIncidents, fetchCopilotAnalysis, askCopilot } from "../api";
+import type { Incident, AIAnalysis } from "../types";
 
 function AIAnalysisPanel({ incident }: { incident: Incident }) {
-  const ai = incident.aiAnalysis;
+  const [ai, setAi] = useState<AIAnalysis | null>(null);
   const [thinking, setThinking] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [question, setQuestion] = useState("");
+  const [chatHistory, setChatHistory] = useState<{role: "user"|"assistant", content: string}[]>([]);
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState<string | null>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setThinking(true);
-    const t = setTimeout(() => setThinking(false), 1200);
-    return () => clearTimeout(t);
-  }, [incident.id]);
+    setError(null);
+    setAi(null);
+    setChatHistory([]);
+    setAskError(null);
+    setQuestion("");
+    fetchCopilotAnalysis(incident.incident_id)
+      .then((data) => {
+        setAi(data);
+        setThinking(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setThinking(false);
+      });
+  }, [incident.incident_id]);
 
   if (thinking) {
     return (
@@ -21,7 +38,16 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
             <span key={i} className="w-2 h-2 bg-[var(--primary)] rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
           ))}
         </div>
-        <div className="text-xs text-[var(--muted-foreground)]">Analyzing incident {incident.id}...</div>
+        <div className="text-xs text-[var(--muted-foreground)]">Analyzing incident {incident.incident_id}...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-2 text-center p-8">
+        <div className="text-sm font-medium text-red-500">Analysis Failed</div>
+        <div className="text-xs text-[var(--muted-foreground)]">{error}</div>
       </div>
     );
   }
@@ -35,6 +61,24 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
     );
   }
 
+  const handleAsk = async () => {
+    if (!question.trim() || asking) return;
+    const userQ = question;
+    setQuestion("");
+    setChatHistory(prev => [...prev, { role: "user", content: userQ }]);
+    setAsking(true);
+    setAskError(null);
+    try {
+      const res = await askCopilot(incident.incident_id, userQ);
+      setChatHistory(prev => [...prev, { role: "assistant", content: res.answer }]);
+    } catch (err: any) {
+      setAskError(err.message || "Failed to ask copilot");
+      setChatHistory(prev => [...prev, { role: "assistant", content: "Error: " + (err.message || "Failed to ask copilot") }]);
+    } finally {
+      setAsking(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-5 overflow-y-auto animate-fade-in">
       {/* Header */}
@@ -44,7 +88,7 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
         </div>
         <div className="flex-1">
           <div className="text-sm font-semibold text-[var(--foreground)]">Incident Analysis</div>
-          <div className="mono text-[10px] text-[var(--muted-foreground)]">{incident.id} · {incident.provider}</div>
+          <div className="mono text-[10px] text-[var(--muted-foreground)]">{incident.incident_id} · {incident.provider_slug}</div>
         </div>
         <Badge variant="info" className="mono">{ai.confidence}% confidence</Badge>
       </div>
@@ -59,7 +103,7 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
       <div>
         <div className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Observed Patterns</div>
         <div className="flex flex-col gap-1">
-          {ai.observedPatterns.map((p, i) => (
+          {ai.observedPatterns?.map((p, i) => (
             <div key={i} className="flex items-start gap-2.5 bg-[var(--secondary)] border border-[var(--border)] rounded-[var(--radius)] px-3 py-2">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] flex-shrink-0 mt-1.5" />
               <span className="text-xs text-[var(--foreground)]">{p}</span>
@@ -78,7 +122,7 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
       <div>
         <div className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Actions Taken</div>
         <div className="flex flex-col gap-1">
-          {ai.actionsTaken.map((a, i) => (
+          {ai.actionsTaken?.map((a, i) => (
             <div key={i} className="flex items-center gap-2 text-xs text-green-500">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
               {a}
@@ -91,7 +135,7 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
       <div>
         <div className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Recommended Engineering Actions</div>
         <div className="flex flex-col gap-2">
-          {ai.recommendations.map((r, i) => (
+          {ai.recommendations?.map((r, i) => (
             <div key={i} className="flex items-start gap-2.5 bg-[var(--accent)]/5 border border-[var(--accent)]/15 rounded-[var(--radius)] px-3 py-2.5">
               <span className="text-[var(--accent)] flex-shrink-0">→</span>
               <span className="text-xs text-[var(--foreground)]">{r}</span>
@@ -104,20 +148,52 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
       <div>
         <div className="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider mb-2">Affected Components</div>
         <div className="flex flex-wrap gap-1.5">
-          {ai.affectedComponents.map(c => (
+          {ai.affectedComponents?.map(c => (
             <Badge key={c} variant="muted" className="mono text-[10px]">{c}</Badge>
           ))}
         </div>
       </div>
 
+      {/* Chat History */}
+      {chatHistory.length > 0 && (
+        <div className="flex flex-col gap-3 pt-4 border-t border-[var(--border)]">
+          {chatHistory.map((msg, idx) => (
+            <div key={idx} className={`flex flex-col gap-1 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+              <div className={`text-xs font-semibold ${msg.role === "user" ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"}`}>
+                {msg.role === "user" ? "You" : "Copilot"}
+              </div>
+              <div className={`text-sm px-3 py-2 rounded-lg ${msg.role === "user" ? "bg-[var(--primary)]/10 text-[var(--foreground)]" : "bg-[var(--secondary)] text-[var(--foreground)]"} max-w-[85%] whitespace-pre-wrap`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          {asking && (
+            <div className="flex flex-col gap-1 items-start">
+              <div className="text-xs font-semibold text-[var(--muted-foreground)]">Copilot</div>
+              <div className="text-sm px-3 py-2 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] max-w-[85%]">
+                <div className="flex gap-1.5 p-1">
+                  {[0,1,2].map(i => (
+                    <span key={i} className="w-1.5 h-1.5 bg-[var(--muted-foreground)] rounded-full animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Follow-up input */}
-      <div className="pt-4 border-t border-[var(--border)]">
+      <div className={`pt-4 ${chatHistory.length === 0 ? "border-t border-[var(--border)]" : ""}`}>
         <div className="flex items-center gap-2">
           <input
             placeholder="Ask a follow-up question about this incident..."
-            className="flex-1 text-sm bg-[var(--secondary)] border border-[var(--border)] rounded-[var(--radius)] px-3 py-2 text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--accent)]"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+            disabled={asking}
+            className="flex-1 text-sm bg-[var(--secondary)] border border-[var(--border)] rounded-[var(--radius)] px-3 py-2 text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:outline-none focus:border-[var(--accent)] disabled:opacity-50"
           />
-          <Button variant="primary" size="sm">Ask</Button>
+          <Button variant="primary" size="sm" onClick={handleAsk} disabled={asking || !question.trim()}>Ask</Button>
         </div>
       </div>
     </div>
@@ -126,6 +202,13 @@ function AIAnalysisPanel({ incident }: { incident: Incident }) {
 
 export function Copilot() {
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+
+  useEffect(() => {
+    fetchIncidents().then(data => {
+      setIncidents(data.incidents || []);
+    });
+  }, []);
 
   return (
     <div className="flex flex-col gap-6 p-6 animate-fade-in">
@@ -138,10 +221,10 @@ export function Copilot() {
         {/* Incident selector */}
         <div className="flex flex-col gap-3">
           <div className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Select Incident</div>
-          {INCIDENTS.map(inc => (
+          {incidents.map(inc => (
             <Card
-              key={inc.id}
-              className={`p-4 cursor-pointer transition-all ${selectedIncident?.id === inc.id ? "border-[var(--accent)]/50 bg-[var(--accent)]/5" : "hover:border-[var(--accent)]/30"}`}
+              key={inc.incident_id}
+              className={`p-4 cursor-pointer transition-all ${selectedIncident?.incident_id === inc.incident_id ? "border-[var(--accent)]/50 bg-[var(--accent)]/5" : "hover:border-[var(--accent)]/30"}`}
               onClick={() => setSelectedIncident(inc)}
             >
               <div className="flex items-center gap-1.5 mb-1.5">
@@ -149,11 +232,11 @@ export function Copilot() {
                   inc.severity === "critical" ? "error" : inc.severity === "high" ? "warning" : "info"
                 } className="text-[10px]">{inc.severity.toUpperCase()}</Badge>
                 <Badge variant={inc.status === "resolved" ? "success" : "error"} className="text-[10px]">{inc.status}</Badge>
-                {!inc.aiAnalysis && <Badge variant="muted" className="text-[9px]">No AI</Badge>}
+                {"ai_analysis" in (inc.metadata || {}) ? <Badge variant="success" className="text-[9px]">AI Cached</Badge> : <Badge variant="muted" className="text-[9px]">Generate AI</Badge>}
               </div>
               <div className="text-xs font-medium text-[var(--foreground)] mb-1">{inc.title}</div>
-              <div className="mono text-[10px] text-[var(--muted-foreground)]">{inc.id} · {inc.provider}</div>
-              <div className="text-[10px] text-[var(--muted-foreground)] mt-1.5">{inc.started.split(" ")[1]}</div>
+              <div className="mono text-[10px] text-[var(--muted-foreground)]">{inc.incident_id} · {inc.provider_slug}</div>
+              <div className="text-[10px] text-[var(--muted-foreground)] mt-1.5">{inc.started_at_iso}</div>
             </Card>
           ))}
         </div>
@@ -185,3 +268,4 @@ export function Copilot() {
     </div>
   );
 }
+

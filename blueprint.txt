@@ -1,0 +1,1402 @@
+================================================================================
+SPHINXGATE — TEAM PRESENTATION BLUEPRINT
+================================================================================
+Last verified against codebase: Phase 2.5 complete (122/122 tests passing)
+================================================================================
+
+
+════════════════════════════════════════════════════════════════════════════════
+SAANVI — CLOUD & INFRASTRUCTURE ENGINEER
+Presentation: Parameter 1 — Problem Understanding & Relevance (10 marks)
+════════════════════════════════════════════════════════════════════════════════
+
+
+1. WHAT SAANVI MUST UNDERSTAND FIRST
+──────────────────────────────────────────────────────────────────────────────
+She should be able to explain this without slides:
+
+    Application
+        ↓
+    Third-party / Upstream API
+        ↓
+    API becomes slow / down / rate-limited
+        ↓
+    Application is affected
+        ↓
+    Users experience failures
+
+What is an upstream API?
+
+    An upstream API is an external service that our application depends on.
+
+    Examples in our project:
+        - Gemini
+        - Groq
+        - Open-Meteo
+        - JokeAPI
+        - Frankfurter
+        - Open Trivia DB
+
+From our application's perspective:
+
+    Our Application
+          ↓
+       SphinxGate
+          ↓
+    Upstream Provider
+
+
+2. THE ACTUAL PROBLEM
+──────────────────────────────────────────────────────────────────────────────
+She needs to understand that the problem isn't simply:
+
+    "An API sometimes gives an error."
+
+The real problem is:
+
+    When an application depends directly on an external API, an upstream failure
+    can propagate into the application and ultimately affect the user.
+
+Example:
+
+    Customer
+       ↓
+    Logistics Application
+       ↓
+    External API
+       ↓
+    API outage
+       ↓
+    Application request fails
+       ↓
+    Customer affected
+
+
+3. WHY IS THIS IMPORTANT?
+──────────────────────────────────────────────────────────────────────────────
+She should know these consequences:
+
+    Availability
+        The application may become unavailable for functionality dependent
+        on that API.
+
+    Latency
+        A slow upstream API makes the application's response slow.
+
+    Rate limits
+        Too many requests can cause: 429 Too Many Requests
+
+    Cascading failures
+        Repeatedly calling an unhealthy API can make the situation worse.
+
+    Dependency risk
+        The application becomes heavily dependent on one external service.
+
+
+4. WHO IS AFFECTED?
+──────────────────────────────────────────────────────────────────────────────
+She should be able to answer this clearly.
+
+    Directly — Application developers / engineering teams
+        They have to deal with:
+            - provider failures
+            - retries
+            - timeouts
+            - API keys
+            - rate limits
+            - provider-specific errors
+
+    Indirectly — End users
+        They experience:
+            - slow responses
+            - errors
+            - unavailable functionality
+
+    Organizations can experience:
+        - service disruption
+        - operational overhead
+        - dependency on a single provider
+        - increased cost during failures
+
+
+5. WHY NORMAL / DIRECT INTEGRATION FALLS SHORT
+──────────────────────────────────────────────────────────────────────────────
+Suppose: Application → Gemini
+
+If Gemini fails:  Application → ❌
+
+Developers then have to individually implement:
+    - retry
+    - timeout
+    - fallback
+    - rate limiting
+    - circuit breaker
+    - logging
+
+    ... for every external dependency. That becomes duplicated and difficult
+    to maintain.
+
+SphinxGate changes this to:
+
+    Application
+         ↓
+     SphinxGate
+         ↓
+    External APIs
+
+    The resilience logic is centralized.
+
+
+6. WHAT SAANVI SHOULD SAY ABOUT SPHINXGATE
+──────────────────────────────────────────────────────────────────────────────
+Her basic explanation:
+
+    "SphinxGate is designed as a reliability layer between an application and
+    its external API dependencies. Instead of allowing upstream failures to
+    directly propagate to the application, SphinxGate can detect failures,
+    control retries, use circuit breakers and rate limiting, and route to an
+    appropriate alternative where possible."
+
+
+7. DIFFERENCE BETWEEN FAILURE TYPES (CONCEPTUAL)
+──────────────────────────────────────────────────────────────────────────────
+    Failure              Meaning
+    ─────────────────    ────────────────────────────────────────────────────
+    Timeout              Provider didn't respond within allowed time
+    429                  Too many requests / rate limit
+    5xx                  Provider/server-side error
+    Connection error     Can't establish communication
+    Authentication error Credentials invalid
+    Quota exhausted      Provider allocation/credits unavailable
+
+    She doesn't need to memorize implementation details.
+    She needs to understand: Not every failure should be treated the same way.
+
+
+8. WHY RETRY ISN'T ENOUGH
+──────────────────────────────────────────────────────────────────────────────
+Mentor may ask: "If API fails, why don't you just retry?"
+
+Answer:
+    "Retry can help with transient failures, but repeatedly retrying an
+    unhealthy provider can increase load and delay the application further.
+    That's why the system combines bounded retries with mechanisms such as
+    circuit breakers and fallback routing."
+
+
+9. WHAT IS CASCADING FAILURE?
+──────────────────────────────────────────────────────────────────────────────
+    Provider becomes slow
+            ↓
+    Our application waits
+            ↓
+    More requests accumulate
+            ↓
+    More retries occur
+            ↓
+    Provider receives even more traffic
+            ↓
+    System becomes increasingly unstable
+
+    This is the kind of problem SphinxGate is designed to contain.
+
+
+10. WHAT IS THE "UPSTREAM"?
+──────────────────────────────────────────────────────────────────────────────
+    User
+     ↓
+    Our Application
+     ↓
+    SphinxGate
+     ↓
+    Upstream Provider
+
+    The provider is upstream from SphinxGate.
+
+    If someone asks: "Why do you call Gemini an upstream?"
+    Answer:
+        "Because SphinxGate depends on Gemini to fulfill the request, so
+        Gemini is an upstream dependency from SphinxGate's perspective."
+
+
+11. WHY THE PROJECT FITS DEVELOPER PRODUCTIVITY
+──────────────────────────────────────────────────────────────────────────────
+Domain: Developer Productivity — AI-Assisted Engineering
+
+She should NOT say: "It's a tool that makes APIs faster."
+
+Instead:
+    "SphinxGate reduces the amount of reliability and failure-handling logic
+    individual developers need to implement repeatedly for external API
+    dependencies."
+
+So developers don't individually build:
+    retry logic + circuit breaker + rate limiter + fallback + provider handling
+    ... for every project.
+
+They can integrate with:  Application → SphinxGate
+
+
+12. SAANVI'S CLOUD & INFRASTRUCTURE ROLE
+──────────────────────────────────────────────────────────────────────────────
+She should say:
+    "My role is focused on how SphinxGate can be deployed and operated as a
+    cloud service, including infrastructure, networking, runtime configuration
+    and scalability."
+
+
+13. BASIC CLOUD ARCHITECTURE SHE SHOULD UNDERSTAND
+──────────────────────────────────────────────────────────────────────────────
+Eventually:
+
+                        Internet
+                           │
+                           ▼
+                    Load Balancer
+                           │
+                           ▼
+                  SphinxGate Instances
+                    ┌──────┼──────┐
+                    │      │      │
+                  API-1  API-2  API-3
+                    │      │      │
+                    └──────┼──────┘
+                           │
+                     External APIs
+
+    She doesn't need to implement this yet.
+    She needs to understand why multiple instances might exist.
+
+
+14. WHY MULTIPLE SPHINXGATE INSTANCES?
+──────────────────────────────────────────────────────────────────────────────
+Because one gateway instance itself can fail.
+
+    Bad:
+        User → One SphinxGate server → Server crashes → Everything unavailable
+
+    Better:
+                  Load Balancer
+                  /     |     \
+                 /      |      \
+              SG-1     SG-2    SG-3
+
+    If one instance fails, traffic can potentially continue through others.
+
+
+15. WHAT DOES A LOAD BALANCER DO?
+──────────────────────────────────────────────────────────────────────────────
+    A load balancer distributes incoming requests across available SphinxGate
+    instances and can help avoid sending traffic to unhealthy instances.
+
+
+16. ENVIRONMENT VARIABLES
+──────────────────────────────────────────────────────────────────────────────
+Saanvi should understand deployment configuration.
+
+    Examples:
+        GEMINI_API_KEY
+        GROQ_API_KEY
+        OPENAI_API_KEY
+
+    These shouldn't be hardcoded.
+
+    Development:   .env file
+    Production:    Secret manager / secure environment configuration
+
+    The important principle: Secrets are configuration, not source code.
+
+
+17. WHAT HAPPENS WHEN DEPLOYING SPHINXGATE?
+──────────────────────────────────────────────────────────────────────────────
+High-level:
+
+    Code → Container → Cloud runtime → Environment configuration
+    → SphinxGate → External providers
+
+    Docker: Packages the application and its dependencies consistently.
+
+    CI/CD: Automates things like:
+        Code push → Tests → Build → Deploy
+
+    Don't claim a complete production CI/CD pipeline exists yet.
+
+
+18. SCALABILITY QUESTION
+──────────────────────────────────────────────────────────────────────────────
+Mentor may ask: "What happens if 100 users become 100,000 users?"
+
+Answer:
+    "The gateway should be horizontally scalable. We can run multiple stateless
+    SphinxGate instances behind a load balancer, while shared state such as
+    telemetry, distributed rate limits or persistent configuration would need
+    external storage."
+
+    The word STATELESS is important.
+
+
+19. WHY STATELESS?
+──────────────────────────────────────────────────────────────────────────────
+    Ideally:
+        Request 1 → Server A
+        Request 2 → Server B
+        Request 3 → Server C
+        ... and the system still works.
+
+    If critical state exists only inside Server A:
+        Server A dies → State disappears → Scalability problem.
+
+
+20. ONE IMPORTANT CAVEAT SHE SHOULD KNOW
+──────────────────────────────────────────────────────────────────────────────
+Our current resilience components include state such as:
+    - circuit breaker state
+    - rate limiter state
+    - provider health/state
+
+If we scale to multiple gateway instances, we have to consider whether that
+state should remain local or become distributed.
+
+Example:
+    Server A → thinks Gemini is healthy
+    Server B → thinks Gemini is unhealthy
+    → Potentially inconsistent.
+
+A future production architecture might therefore use shared infrastructure for
+certain state. This is a good answer if your mentor asks about scalability.
+
+
+21. WHAT SHE SHOULD NOT STUDY DEEPLY
+──────────────────────────────────────────────────────────────────────────────
+For the presentation, Saanvi doesn't need to master:
+    - FastAPI internals
+    - Python implementation details
+    - Provider adapter code
+    - Async programming
+    - Pytest implementation
+    - Frontend React
+    - AI model internals
+
+She should know them at a high level, but don't spend preparation time there.
+
+
+22. WHAT SHE ABSOLUTELY MUST KNOW
+──────────────────────────────────────────────────────────────────────────────
+    Problem:          Upstream API failure → application impact → user impact
+    Why direct fails: Direct dependency → duplicated failure handling → poor resilience
+    SphinxGate:       Application → SphinxGate → External APIs
+    Core mechanisms:  Timeout, Retry, Circuit Breaker, Rate Limiter, Fallback
+    Current providers: OpenAI, Gemini, Groq, Open-Meteo, JokeAPI, Frankfurter, Trivia
+    Current status:   122/122 automated tests passing
+    Her role:         Cloud & Infrastructure Engineer
+    Future:           Docker, Cloud deployment, Networking, Scaling, Runtime config
+
+
+23. QUESTIONS LIKELY TO BE ASKED TO SAANVI
+──────────────────────────────────────────────────────────────────────────────
+Q: "What happens if the upstream API goes down?"
+A: "SphinxGate detects the failure, classifies it, and depending on the failure
+   and policy can retry, open the circuit breaker, or route to a meaningful
+   fallback. If no suitable fallback exists, it returns an honest structured
+   failure."
+
+Q: "How would you deploy this?"
+A: "We can containerize SphinxGate with Docker and deploy multiple instances
+   behind a load balancer. Secrets would be injected through secure runtime
+   configuration rather than committed to the repository."
+
+Q: "How will it scale?"
+A: "Horizontally, by running multiple gateway instances. Shared state such as
+   distributed rate limiting and resilience state would need appropriate shared
+   infrastructure as the deployment grows."
+
+Q: "What if SphinxGate itself goes down?"
+A: "That's why a production deployment shouldn't rely on a single gateway
+   instance. Multiple instances behind a load balancer can reduce the gateway
+   itself becoming a single point of failure."
+
+Q: "Why cloud deployment?"
+A: "Because SphinxGate is intended to sit between applications and external API
+   dependencies, so it needs to be reliably reachable and scalable. Cloud
+   infrastructure provides mechanisms for multiple instances, networking,
+   monitoring and deployment automation."
+
+Q: "Are you already deployed on cloud?"
+A: "Not yet. Our current implementation is focused on the gateway, resilience
+   engine and provider architecture. Cloud deployment is part of the
+   infrastructure work planned for the next stages."
+
+    !! NEVER BLUFF THIS !!
+
+
+24. HER 1-MINUTE PRESENTATION SCRIPT
+──────────────────────────────────────────────────────────────────────────────
+    "The problem we identified is the dependency of modern applications on
+    external upstream APIs. When an upstream service becomes slow, unavailable,
+    rate-limited or starts returning errors, those failures can propagate into
+    the application and ultimately affect users.
+
+    The problem becomes more difficult when applications depend on multiple
+    external services, because developers have to repeatedly implement mechanisms
+    such as retries, timeouts, rate limiting and failure handling.
+
+    SphinxGate addresses this by introducing a reliability layer between the
+    application and its external API dependencies. It can control how requests
+    interact with those providers and prevent individual upstream failures from
+    unnecessarily propagating to the application.
+
+    From the infrastructure perspective, the system can later be deployed as
+    multiple gateway instances behind a load balancer, with secure runtime
+    configuration, monitoring and scalable infrastructure. My role as the Cloud
+    and Infrastructure Engineer is focused on that deployment and operational
+    side."
+
+
+25. HER PREPARATION CHECKLIST
+──────────────────────────────────────────────────────────────────────────────
+Before the presentation, Saanvi should be able to answer without looking at notes:
+
+    [ ] What is an upstream API?
+    [ ] What problem are we solving?
+    [ ] Who is affected?
+    [ ] Why does it matter?
+    [ ] What is SphinxGate?
+    [ ] Why not directly call the provider?
+    [ ] What is a timeout?
+    [ ] What is retry?
+    [ ] Why exponential backoff?
+    [ ] What is a circuit breaker?
+    [ ] What is rate limiting?
+    [ ] What is fallback?
+    [ ] Why can't every provider be a fallback for every other provider?
+    [ ] What are our 7 current providers?
+    [ ] What does her Cloud & Infrastructure role mean?
+    [ ] Why Docker?
+    [ ] Why load balancing?
+    [ ] What is horizontal scaling?
+    [ ] What happens if SphinxGate itself fails?
+    [ ] How would secrets be handled in production?
+    [ ] What is currently implemented vs planned?
+
+THE ONE THING SHE SHOULD REMEMBER:
+    Her job is not to prove that she wrote the backend. Her job is to prove that
+    she understands the problem deeply and understands how SphinxGate can become
+    a reliable infrastructure layer around that problem.
+
+
+════════════════════════════════════════════════════════════════════════════════
+ANANYA — DEVOPS & SECURITY ENGINEER
+Presentation: Parameter 3 — Technical Approach & Feasibility (10 marks)
+════════════════════════════════════════════════════════════════════════════════
+
+
+1. HER MAIN PRESENTATION RESPONSIBILITY
+──────────────────────────────────────────────────────────────────────────────
+She needs to explain:
+    "How are we actually building SphinxGate, what technologies are we using,
+    and why is this technically feasible within our available time?"
+
+    Architecture → Technologies → Request flow → Resilience mechanisms
+    → Provider architecture → Testing → Security → Feasibility
+
+
+2. SHE MUST KNOW THE OVERALL ARCHITECTURE
+──────────────────────────────────────────────────────────────────────────────
+Current:
+
+    Client / Frontend
+            ↓
+        FastAPI Gateway
+            ↓
+     Resilience Engine
+            ↓
+     Provider Registry
+            ↓
+     Provider Adapter
+            ↓
+     Upstream API
+
+And around the system:
+
+    Frontend
+       ↓
+    SphinxGate
+       ├── Routing
+       ├── Retry
+       ├── Circuit Breaker
+       ├── Rate Limiting
+       ├── Timeout
+       ├── Fallback
+       └── Provider Adapters
+
+
+3. TECHNOLOGY STACK
+──────────────────────────────────────────────────────────────────────────────
+    Component            Technology
+    ─────────────────    ────────────────────────────────
+    Backend              FastAPI
+    Language             Python
+    HTTP client          httpx
+    Testing              Pytest
+    Frontend             React / Vite
+    LLM providers        OpenAI, Gemini, Groq
+    Public APIs          Open-Meteo, JokeAPI, Frankfurter, Trivia
+    Containerization     Docker (planned)
+    CI/CD                GitHub Actions (planned)
+    Configuration        Environment variables
+    Future telemetry     Telemetry store (Phase 3)
+    Future AI layer      AI Engineering Copilot (Phase 5)
+
+    IMPORTANT: Docker/GitHub Actions are planned/in the technical approach.
+    Don't claim full production CI/CD deployment is already implemented.
+
+
+4. WHAT HAPPENS TO A REQUEST?
+──────────────────────────────────────────────────────────────────────────────
+She needs to understand this flow very well:
+
+    User → Frontend → SphinxGate endpoint → Provider selection
+    → Resilience Engine → Rate limiter → Circuit breaker
+    → Retry / timeout handling → Provider adapter → Upstream API
+    → Response → SphinxGate → Frontend
+
+If something fails:
+
+    Provider → Failure → Classify → Retry if appropriate
+    → Still failing? → Fallback / circuit breaker → Response
+
+
+5. WHY FASTAPI?
+──────────────────────────────────────────────────────────────────────────────
+    "FastAPI gives us a lightweight API framework with request validation and
+    asynchronous support, which is suitable for a gateway that needs to handle
+    many HTTP requests and make outbound API calls."
+
+
+6. WHY HTTPX?
+──────────────────────────────────────────────────────────────────────────────
+    "httpx is used for outbound HTTP communication between SphinxGate and
+    upstream providers. Its async support fits the FastAPI architecture."
+
+
+7. WHY ADAPTERS?
+──────────────────────────────────────────────────────────────────────────────
+This is extremely important for the technical-feasibility section.
+
+Without adapters:
+    Gateway
+     ├── if Gemini...
+     ├── if Groq...
+     ├── if Open-Meteo...
+     ├── if JokeAPI...
+     → That becomes messy.
+
+With adapters:
+    BaseProvider
+        │
+        ├── GeminiAdapter
+        ├── GroqAdapter
+        ├── OpenMeteoAdapter
+        ├── JokeAPIAdapter
+        └── ...
+
+So: Provider-specific logic stays isolated, while the resilience engine
+    remains generic.
+
+
+8. WHY IS PHASE 2.5 TECHNICALLY IMPORTANT?
+──────────────────────────────────────────────────────────────────────────────
+She should understand this sentence:
+
+    "Adding a new provider should require implementing and registering an
+    adapter rather than modifying the core resilience engine."
+
+    That demonstrates modularity and extensibility.
+
+Current:
+    3 LLM providers + 4 Public APIs = 7 providers
+    122/122 tests passing
+    This is strong evidence for feasibility.
+
+
+9. WHAT EXACTLY IS THE RESILIENCE ENGINE?
+──────────────────────────────────────────────────────────────────────────────
+She needs to know the components:
+
+    Resilience Engine
+    ├── Timeout
+    ├── Failure Classification
+    ├── Retry + Exponential Backoff
+    ├── Circuit Breaker
+    ├── Rate Limiter
+    ├── Fallback
+    └── Provider State
+
+
+10. EXPLAIN RETRY TECHNICALLY
+──────────────────────────────────────────────────────────────────────────────
+    Request → Provider timeout → Is timeout retryable? YES
+    → Retry → Failure → Backoff → Retry
+
+    Why backoff?
+    To avoid immediately hammering an already unhealthy provider.
+    Current policy: bounded retries with exponential backoff.
+
+
+11. EXPLAIN CIRCUIT BREAKER
+──────────────────────────────────────────────────────────────────────────────
+    CLOSED
+     ↓ (repeated failures)
+    OPEN
+     ↓ (recovery period)
+    HALF-OPEN
+     ↓
+    success → CLOSED
+    failure → OPEN
+
+    Why?
+    To stop repeatedly sending requests to a provider that is already unhealthy.
+
+
+12. EXPLAIN RATE LIMITING
+──────────────────────────────────────────────────────────────────────────────
+    Request → Rate limiter → within limit?
+        YES → provider
+        NO  → 429
+
+    The gateway can reject excessive requests BEFORE making the upstream call.
+
+
+13. EXPLAIN FALLBACK
+──────────────────────────────────────────────────────────────────────────────
+Example:
+    OpenAI → 429 / quota failure → Gemini → 200
+
+    But she should mention:
+    "Fallback must be capability-aware. We cannot use an unrelated API as a
+    fallback simply because it is available."
+
+    Examples:
+        Weather ❌ → JokeAPI    (wrong — different capability)
+        LLM      ✅ → another suitable LLM  (correct)
+
+
+14. THE TESTING STORY
+──────────────────────────────────────────────────────────────────────────────
+Current: 122/122 tests passing.
+
+She should know what testing covers conceptually:
+    - provider architecture
+    - resilience behavior
+    - failure classification
+    - retries
+    - circuit breaker
+    - rate limiting
+    - fallback
+    - provider routing
+
+Why automated tests?
+    Because resilience logic has many possible states. You don't want to
+    manually test every combination.
+
+
+15. HOW DID YOU TEST FAILURES WITHOUT REAL APIS?
+──────────────────────────────────────────────────────────────────────────────
+Likely mentor question.
+
+Answer:
+    "The automated test suite uses mocked provider behavior so we can
+    deterministically simulate failures and verify retry, circuit-breaker,
+    fallback and other resilience behavior without depending on external API
+    availability."
+
+
+16. MANUAL TESTING
+──────────────────────────────────────────────────────────────────────────────
+She should know manual demonstrations have covered:
+
+    Connection failure → Retry → 503 / no healthy provider
+
+    Circuit breaker: CLOSED → OPEN → HALF-OPEN → OPEN again when probe fails
+
+    Fallback: OpenAI failure → Gemini → Success
+
+    Rate limiting: limit exceeded → 429 from gateway → no Gemini call
+
+
+17. SECURITY — HER MAJOR RESPONSIBILITY
+──────────────────────────────────────────────────────────────────────────────
+She needs to understand:
+
+    API keys must NOT be:
+        ❌ hardcoded in source
+        ❌ sent by frontend
+        ❌ committed to Git
+        ❌ included in logs
+        ❌ passed unnecessarily in URLs
+
+    Instead:
+        backend environment → provider configuration → adapter → upstream API
+
+
+18. IMPORTANT SECURITY LESSON FROM DEVELOPMENT
+──────────────────────────────────────────────────────────────────────────────
+During development, the Gemini key was initially being sent through a query
+parameter and could appear in logs. The key was revoked and the implementation
+was changed to use the x-goog-api-key header instead.
+
+The lesson:
+    Secrets must never appear in URLs or logs.
+
+If mentor asks, don't hide the development incident. The important part is that
+it was identified, the exposed key was revoked, and the implementation was
+corrected.
+
+
+19. SECRET SCANNING
+──────────────────────────────────────────────────────────────────────────────
+    Code → Secret scanner → Detect accidentally committed credentials
+    → Fail pipeline
+
+    This is part of the PLANNED security/CI pipeline.
+    She should NOT say it is already fully implemented.
+    Say: "Secret scanning is part of our planned DevOps hardening."
+
+
+20. DOCKER
+──────────────────────────────────────────────────────────────────────────────
+She should understand the purpose, not Docker internals.
+
+Without Docker: "My machine works."
+With Docker:    Application + Dependencies + Runtime = Container
+
+So SphinxGate can be packaged consistently.
+
+
+21. GITHUB ACTIONS
+──────────────────────────────────────────────────────────────────────────────
+Conceptually:
+    Developer pushes code → GitHub Actions → Install dependencies
+    → Run tests → Build → Potential deployment
+
+Important benefit:
+    Prevent broken code from moving forward automatically.
+
+Distinguish planned CI/CD from what's currently implemented.
+
+
+22. FEASIBILITY — PROBABLY THE MOST IMPORTANT PART
+──────────────────────────────────────────────────────────────────────────────
+Mentor may ask: "Can you actually finish this?"
+
+Current:
+    Phase 1  ✅  Gateway foundation
+    Phase 2  ✅  Resilience engine
+    Phase 2.5 ✅  Generalized providers
+
+Next:
+    Phase 3  —   Facade + Observability
+    Phase 4  —   Fault Injection + Incidents
+    Phase 5  —   AI Engineering Copilot
+
+This phased approach makes the project feasible because we're not trying to
+build everything simultaneously.
+
+
+23. WHY THE PROJECT IS TECHNICALLY FEASIBLE
+──────────────────────────────────────────────────────────────────────────────
+Her reasoning:
+
+    Modular architecture:      Provider-specific code is isolated.
+    Incremental phases:        Each phase produces a working capability.
+    Existing technologies:     FastAPI, httpx, Pytest, React, Docker are mature.
+    Automated testing:         122 tests provide regression protection.
+    No model training:         We're not trying to train a foundation model.
+    External APIs exist:       Project doesn't need to build upstream AI/API infra.
+
+
+24. WHAT SHE SHOULD SAY ABOUT THE AI PART
+──────────────────────────────────────────────────────────────────────────────
+Current: The AI Engineering Copilot is planned for Phase 5.
+
+It will eventually use: logs + telemetry + provider health + resilience events
++ incidents → to help engineers analyze failures.
+
+Don't say: "Our AI already detects root causes." Not yet.
+
+
+25. LIKELY TECHNICAL QUESTIONS
+──────────────────────────────────────────────────────────────────────────────
+Q: "Why not put retry logic inside every provider adapter?"
+A: "Because resilience is a cross-provider concern. Keeping it centralized
+   prevents duplicated logic and ensures consistent policies across providers."
+
+Q: "Why isn't the provider adapter responsible for the circuit breaker?"
+A: "The adapter should understand how to communicate with its provider. The
+   resilience engine should decide how to react when that communication fails.
+   Keeping those responsibilities separate makes the architecture easier to
+   extend."
+
+Q: "What happens if the provider returns an invalid response?"
+A: "The adapter or gateway should validate/normalize the response, and malformed
+   or unsuccessful responses should be handled as failures rather than being
+   presented as successful output."
+
+Q: "What happens if all providers fail?"
+A: "SphinxGate returns a structured failure. It doesn't fabricate a successful
+   response."
+
+Q: "Why not just use one provider?"
+A: "A single provider creates a stronger dependency on that provider's
+   availability, quota and performance. Multiple compatible providers provide an
+   opportunity for resilience and continuity."
+
+Q: "Why seven providers?"
+A: "The goal isn't simply to maximize the provider count. We wanted to
+   demonstrate that the generalized architecture works across different provider
+   types: three LLM providers and four public APIs."
+
+
+26. SUBTLE TECHNICAL QUESTION — DISTRIBUTED STATE
+──────────────────────────────────────────────────────────────────────────────
+Mentor: "If your circuit breaker is stored in memory and you run three
+SphinxGate instances, will all instances know the provider is unhealthy?"
+
+Answer:
+    "Not necessarily. Local in-memory state would be instance-specific. For a
+    horizontally scaled production deployment, shared or coordinated state would
+    be needed for things such as distributed rate limiting and potentially
+    provider health or circuit state, depending on the desired consistency model."
+
+
+27. SUBTLE QUESTION — RESILIENCE AS BOTTLENECK
+──────────────────────────────────────────────────────────────────────────────
+Mentor: "What happens if your resilience mechanism itself becomes a bottleneck?"
+
+Answer:
+    "The resilience layer needs to remain lightweight and asynchronous.
+    Components such as rate limiting and circuit state should have bounded
+    memory and efficient access patterns. At larger scale, shared state and
+    telemetry would need dedicated infrastructure rather than blocking the
+    request path."
+
+
+28. ANOTHER ONE: "IS THIS REALLY AI?"
+──────────────────────────────────────────────────────────────────────────────
+Answer:
+    "The current foundation is primarily reliability and backend engineering.
+    The AI-assisted engineering component is planned for Phase 5, where an AI
+    copilot will analyze operational evidence such as incidents, logs and
+    resilience events. We don't claim that component is already implemented."
+
+
+29. HER 1-MINUTE TECHNICAL PRESENTATION
+──────────────────────────────────────────────────────────────────────────────
+    "Technically, SphinxGate is built as a FastAPI-based gateway using Python
+    and httpx for communication with upstream providers. The architecture
+    separates the gateway, centralized resilience engine and provider adapters.
+
+    The resilience engine provides timeout handling, failure classification,
+    bounded retries with exponential backoff, circuit breakers, rate limiting and
+    fallback routing. Provider-specific behavior is isolated through adapters,
+    allowing us to support both LLM providers such as Gemini and Groq and public
+    APIs such as Open-Meteo and Frankfurter without changing the core resilience
+    logic.
+
+    We currently have seven providers and 122 automated tests passing. We use
+    mocked provider behavior for deterministic resilience testing and have also
+    manually demonstrated circuit breaking, rate limiting and fallback.
+
+    From the DevOps and security perspective, provider credentials remain
+    server-side, Docker and CI/CD are part of the deployment approach, and secret
+    scanning and secure runtime configuration are part of our security hardening.
+    The phased architecture makes the remaining work feasible because each phase
+    builds on an already working foundation."
+
+
+30. ANANYA'S CHECKLIST
+──────────────────────────────────────────────────────────────────────────────
+Architecture:
+    [ ] What is SphinxGate?
+    [ ] Request flow
+    [ ] Provider Registry
+    [ ] Provider Adapter
+    [ ] BaseProvider
+    [ ] LLM vs Public API providers
+
+Resilience:
+    [ ] Timeout
+    [ ] Failure classification
+    [ ] Retry
+    [ ] Exponential backoff
+    [ ] Circuit breaker
+    [ ] Rate limiter
+    [ ] Fallback
+
+Testing:
+    [ ] Why mocking?
+    [ ] 122/122 tests
+    [ ] Manual failure testing
+    [ ] Circuit states
+    [ ] Fallback test
+    [ ] Rate-limit test
+
+Security:
+    [ ] API keys
+    [ ] .env
+    [ ] No secrets in frontend
+    [ ] No secrets in URLs/logs
+    [ ] Secret scanning
+    [ ] Secure production configuration
+
+DevOps:
+    [ ] Docker
+    [ ] GitHub Actions
+    [ ] CI/CD
+    [ ] Cloud deployment
+    [ ] Horizontal scaling
+    [ ] Load balancing
+
+Feasibility:
+    [ ] Why phased development?
+    [ ] What is implemented?
+    [ ] What is planned?
+    [ ] What is NOT implemented yet?
+
+THE MOST IMPORTANT DISTINCTION FOR ANANYA:
+
+    Implemented now:
+        FastAPI gateway + resilience engine + 7-provider architecture
+        + frontend integration + 122 tests.
+
+    Planned next:
+        Facade + observability → fault injection + incidents
+        → AI Engineering Copilot.
+
+    Not yet implemented:
+        Post-Phase-5 progressive local-model/deterministic fallback architecture.
+
+    If asked something outside implemented scope:
+        "That's part of our planned architecture; it isn't implemented in the
+        current prototype yet."
+        That demonstrates technical maturity rather than weakness.
+
+
+════════════════════════════════════════════════════════════════════════════════
+MIHUL — AI/ML ENGINEER
+Presentation: Parameter 4 — Impact & Scalability (10 marks)
+════════════════════════════════════════════════════════════════════════════════
+
+
+1. HIS TWO RESPONSIBILITIES
+──────────────────────────────────────────────────────────────────────────────
+Presentation: Parameter 4 — Impact & Scalability
+
+He needs to explain:
+    What practical impact can SphinxGate have, how can it scale, and what
+    happens when the system itself loses inference capacity?
+
+Team role: AI/ML Engineer
+
+His technical ownership:
+    Phase 5 → AI Engineering Copilot → Incident analysis / RCA assistance
+
+Potential post-Phase-5:
+    External LLMs unavailable → Local/self-hosted model → Degraded AI capability
+
+
+2. WHAT MIHUL MUST UNDERSTAND ABOUT THE AI COPILOT
+──────────────────────────────────────────────────────────────────────────────
+The Copilot is NOT another chatbot.
+
+Its purpose:
+    Analyze SphinxGate's operational evidence and help engineers understand
+    incidents.
+
+Flow:
+    Logs + Telemetry + Provider health + Resilience events + Incident data
+            ↓
+    AI Engineering Copilot
+            ↓
+    Analysis → Likely cause → Recommended action
+
+This is the key concept he should memorize.
+
+
+3. EXAMPLE
+──────────────────────────────────────────────────────────────────────────────
+Suppose Gemini starts failing:
+
+    Gemini
+    Error rate → 81%
+    Latency    → 11.2 sec
+    Circuit    → OPEN
+    Fallback   → Groq
+
+Copilot receives this evidence and could produce:
+
+    Incident: Gemini degradation detected
+
+    Evidence:
+        - Error rate increased
+        - Latency increased
+        - Circuit breaker opened
+        - Traffic shifted to Groq
+
+    Likely cause:
+        Provider-side degradation / quota / timeout pattern
+
+    Current mitigation:
+        Traffic routed to Groq
+
+    Status: Service operating in degraded mode
+
+The important thing: AI EXPLAINS EVIDENCE.
+It shouldn't invent an explanation unsupported by telemetry.
+
+
+4. WHAT IS RCA?
+──────────────────────────────────────────────────────────────────────────────
+RCA = Root Cause Analysis. Why did this incident happen?
+
+Example:
+    High latency → timeouts → retries → more failures → circuit opened
+
+Copilot should help connect those events.
+
+
+5. WHAT DATA SHOULD THE COPILOT RECEIVE?
+──────────────────────────────────────────────────────────────────────────────
+Eventually things like:
+    - request_id
+    - provider
+    - timestamp
+    - latency
+    - status code
+    - failure type
+    - retry count
+    - circuit state
+    - fallback provider
+    - provider health
+
+This is why Phase 3/4 come before the Copilot.
+You can't build meaningful incident analysis without good operational evidence.
+
+
+6. WHY NOT SIMPLY GIVE THE AI RAW LOGS?
+──────────────────────────────────────────────────────────────────────────────
+Because raw logs can contain:
+    - secrets
+    - user prompts
+    - sensitive data
+    - irrelevant information
+
+So eventually:
+    Raw telemetry → Filter / sanitize → Relevant incident context → AI
+
+This is an important security consideration for Mihul.
+
+
+7. WHAT SHOULD THE AI ACTUALLY OUTPUT?
+──────────────────────────────────────────────────────────────────────────────
+Structured output:
+    - Incident
+    - Cause hypothesis
+    - Evidence
+    - Affected provider
+    - Impact
+    - Mitigation already taken
+    - Recommended next action
+    - Confidence / uncertainty
+
+Especially: CAUSE HYPOTHESIS — not "This is definitely the cause."
+The AI is analyzing evidence, not magically knowing the provider's
+internal state.
+
+
+8. LOCAL MODEL — MIHUL'S FUTURE RESPONSIBILITY
+──────────────────────────────────────────────────────────────────────────────
+This is NOT current implementation.
+
+Proposed architecture:
+    Cloud Provider A → failure
+    Cloud Provider B → failure
+    Cloud Provider C → failure
+    Local Model → Deterministic / Cache → Graceful Failure
+
+The local model exists for: Emergency/degraded inference capacity.
+NOT to replace Gemini/Groq/etc.
+
+
+9. WHAT SHOULD THE LOCAL MODEL REALISTICALLY HANDLE?
+──────────────────────────────────────────────────────────────────────────────
+Suitable:
+    - classification
+    - extraction
+    - short summarization
+    - simple Q&A
+    - text transformation
+    - structured output
+    - simple incident summarization
+
+Not necessarily:
+    - huge-context reasoning
+    - advanced coding
+    - complex multimodal tasks
+    - tasks requiring unavailable tools
+
+
+10. HOW DOES SPHINXGATE DECIDE WHETHER LOCAL INFERENCE IS SUITABLE?
+──────────────────────────────────────────────────────────────────────────────
+Conceptually:
+
+    Request → Request Classification → What capabilities are required?
+    → Compare with local model capabilities → Suitable?
+        YES → Local
+        NO  → next fallback
+
+Possible requirements:
+    - task type
+    - context length
+    - modality
+    - structured output
+    - tool requirement
+    - minimum model capability
+
+
+11. WHAT IF THE LOCAL MODEL ALSO FAILS?
+──────────────────────────────────────────────────────────────────────────────
+    Local model → failure → Cache / deterministic option?
+        YES → use it
+        NO  → Graceful failure
+
+    Never fabricate an answer.
+
+This connects to SphinxGate's core principle:
+    Failure is acceptable. Silent failure and fake success are not.
+
+
+12. MIHUL NEEDS TO UNDERSTAND GRACEFUL DEGRADATION
+──────────────────────────────────────────────────────────────────────────────
+Potential future states:
+
+    State          Capability
+    ────────────   ─────────────────────────────────
+    FULL           Multiple cloud providers
+    DEGRADED       Alternative cloud provider
+    EMERGENCY      Local model
+    LIMITED        Cache / deterministic tools
+    UNAVAILABLE    Honest failure
+
+This is PROPOSED POST-PHASE-5 ARCHITECTURE, not current functionality.
+
+
+13. IMPACT & SCALABILITY — HIS 10 MARKS
+──────────────────────────────────────────────────────────────────────────────
+He should explain impact in terms of:
+
+    Developers:
+        Less repeated resilience logic.
+
+    Applications:
+        Less direct dependency on a single provider.
+
+    Users:
+        Potentially fewer application-level failures during upstream incidents.
+
+    Operations teams:
+        Better visibility into:
+            - what failed
+            - why it failed
+            - what SphinxGate did
+            - whether recovery occurred
+
+    Scalability:
+        Provider abstraction allows more providers to be added without rewriting
+        the resilience engine.
+
+
+14. VERY IMPORTANT: DON'T CLAIM "ZERO DOWNTIME"
+──────────────────────────────────────────────────────────────────────────────
+If Mihul says: "SphinxGate guarantees zero downtime." — That's WRONG.
+
+Better:
+    "SphinxGate is designed to improve service continuity and reduce the impact
+    of upstream failures."
+
+Failover, circuit breaking, redundancy and graceful degradation are mechanisms
+for IMPROVING reliability — not absolute guarantees.
+
+
+15. QUESTIONS MENTOR MAY ASK MIHUL
+──────────────────────────────────────────────────────────────────────────────
+Q: "Why do you need AI for incident analysis?"
+A: "Because the gateway can collect a large amount of operational evidence. The
+   Copilot can correlate those signals and present engineers with a structured
+   explanation and possible root causes instead of requiring them to manually
+   inspect everything."
+
+Q: "How do you prevent the AI from hallucinating?"
+A: "We should ground its analysis in actual telemetry and incident evidence,
+   provide the evidence alongside the explanation, and distinguish observed
+   facts from hypotheses."
+
+Q: "Can the AI automatically fix the problem?"
+A: "Not initially. The first goal is analysis and recommendation. Autonomous
+   remediation would require additional safeguards and validation."
+
+Q: "Why do you need a local model?"
+A: "It's a proposed post-Phase-5 capability for emergency inference when
+   suitable external providers are unavailable. It would provide degraded
+   functionality for requests within its capabilities rather than attempting
+   to replace larger cloud models."
+
+Q: "Can the local model handle everything?"
+A: "No. Its capability would be explicitly bounded. SphinxGate would need to
+   determine whether a request is compatible with the local model before routing
+   it there."
+
+Q: "What happens if every model fails?"
+A: "We fall back to deterministic or cached functionality where appropriate. If
+   nothing can legitimately fulfill the request, we return a transparent
+   degraded/unavailable response rather than fabricate an answer."
+
+Q: "How does the AI know which provider failed?"
+A: "Through the telemetry and resilience events generated by SphinxGate — for
+   example provider identity, status, latency, retry count, circuit state and
+   fallback information."
+
+
+16. WHAT MIHUL SHOULD STUDY
+──────────────────────────────────────────────────────────────────────────────
+Must know for presentation:
+    [ ] What is AI Engineering Copilot?
+    [ ] What is RCA?
+    [ ] What is telemetry?
+    [ ] What is an incident?
+    [ ] How resilience events reach the AI layer
+    [ ] AI vs traditional monitoring
+    [ ] Hallucination / grounding
+    [ ] Why structured incident context matters
+    [ ] Impact of SphinxGate
+    [ ] Scalability concept
+    [ ] Current vs planned architecture
+
+Later, for actual Phase 5:
+    [ ] RAG / grounding
+    [ ] Structured output
+    [ ] Prompt engineering
+    [ ] Incident summarization
+    [ ] Evidence extraction
+    [ ] Confidence/uncertainty
+    [ ] Evaluation of RCA quality
+    [ ] Local LLM serving
+    [ ] Model capability evaluation
+
+
+17. THE KEY DISTINCTION MIHUL MUST BE STRONG AT
+──────────────────────────────────────────────────────────────────────────────
+Traditional monitoring:
+    "Gemini has 81% errors."
+
+versus
+
+AI Engineering Copilot:
+    "Gemini's error rate increased to 81%, latency also increased, the circuit
+    opened, and traffic shifted to Groq. This pattern is consistent with
+    provider-side degradation, but the evidence does not establish the
+    provider's internal root cause."
+
+Monitoring tells you WHAT happened.
+The Copilot helps engineers INTERPRET the evidence.
+
+That's the AI-assistance story of SphinxGate.
+
+
+18. MIHUL'S 1-MINUTE PRESENTATION
+──────────────────────────────────────────────────────────────────────────────
+    "Our expected impact is to reduce the effect of upstream API failures on
+    applications and reduce the amount of manual reliability work required from
+    developers. SphinxGate centralizes resilience mechanisms and provides a
+    consistent interface across multiple providers.
+
+    In the later phase, our AI Engineering Copilot will analyze telemetry,
+    resilience events and incidents to help engineers understand what happened,
+    identify evidence-based root-cause hypotheses and recommend actions.
+
+    We are also exploring a post-Phase-5 local-model fallback. This would not
+    replace cloud models, but provide limited emergency inference for requests
+    that fall within its capabilities when external providers are unavailable.
+    If even that fails, the system should degrade to cached or deterministic
+    functionality where appropriate, and otherwise report an honest failure.
+
+    This gives SphinxGate a potential path from simple provider failover toward
+    progressive service degradation and continuity."
+
+
+19. MIHUL'S CORE MENTAL MODEL
+──────────────────────────────────────────────────────────────────────────────
+        INCIDENT
+            ↓
+        TELEMETRY
+            ↓
+      AI COPILOT
+            ↓
+   Evidence + RCA hypothesis
+            ↓
+     Recommendation
+
+And the future local-model concept:
+
+    Cloud A
+      ↓
+    Cloud B
+      ↓
+    Cloud C
+      ↓
+    Local Model
+      ↓
+    Cache / Deterministic
+      ↓
+    Honest Failure
+
+The second diagram is PROPOSED ONLY — not something he should claim exists
+in the presentation.
+
+
+================================================================================
+FACT-VERIFIED AGAINST CURRENT CODEBASE — NOTES FOR THE TEAM
+================================================================================
+(Do not present these notes — they are for internal reference only)
+================================================================================
+
+The following facts in the blueprint above have been cross-verified against the
+actual Phase 2.5 codebase and are CONFIRMED ACCURATE:
+
+  ✅  7 providers registered: openai, gemini, groq, open_meteo, jokeapi,
+      frankfurter, trivia
+  ✅  122/122 automated tests passing (test_resilience.py + test_gemini.py
+      + test_phase25.py)
+  ✅  Resilience engine components: timeout, retry+backoff, circuit breaker,
+      rate limiter, fallback, failure classification
+  ✅  Circuit breaker states: CLOSED → OPEN → HALF-OPEN
+  ✅  LLM fallback chain configured: openai → gemini,groq | gemini → groq
+  ✅  API keys sourced from environment variables, never from client requests
+  ✅  x-goog-api-key used for Gemini (header, not query param)
+  ✅  Groq uses Authorization: Bearer (header, not URL)
+  ✅  Public API providers require no key (requires_api_key = False)
+  ✅  Technology stack: FastAPI, Python, httpx, Pytest, React/Vite
+  ✅  Frontend has Groq + all 4 public API providers in the Playground
+  ✅  POST /api/v1/query endpoint exists for public API providers
+  ✅  GET /api/v1/providers endpoint exists
+  ✅  .env used for dev secrets; .env.example documents all variables
+  ✅  Phase 1, 2, 2.5 complete; Phases 3/4/5 not implemented
+  ✅  AI Copilot is Phase 5 — NOT currently implemented
+  ✅  Local model fallback is post-Phase-5 — NOT currently implemented
+  ✅  Docker and GitHub Actions are PLANNED, not fully implemented yet
+  ✅  Circuit breaker state is in-memory (per-instance, not distributed)
+  ✅  Rate limiter is in-memory sliding window (not distributed)
+
+================================================================================
+END OF BLUEPRINT
+================================================================================

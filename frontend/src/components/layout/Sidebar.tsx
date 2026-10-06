@@ -50,13 +50,6 @@ const NAV_GROUPS: NavGroup[] = [
       { id: "incidents", label: "Incidents", icon: <FlagIcon /> },
     ],
   },
-  {
-    label: "MANAGEMENT",
-    items: [
-      { id: "api-keys", label: "API Keys", icon: <KeyIcon /> },
-      { id: "settings", label: "Settings", icon: <SettingsIcon /> },
-    ],
-  },
 ];
 
 interface SidebarProps {
@@ -80,7 +73,7 @@ export function Sidebar({ active, onNav }: SidebarProps) {
         </div>
         {!collapsed && (
           <div>
-            <div className="text-sm font-semibold text-[var(--foreground)] leading-none">NexusGate</div>
+            <div className="text-sm font-semibold text-[var(--foreground)] leading-none">SphinxGate</div>
             <div className="text-[10px] text-[var(--muted-foreground)] mt-0.5">API Infrastructure</div>
           </div>
         )}
@@ -133,17 +126,7 @@ export function Sidebar({ active, onNav }: SidebarProps) {
             </button>
           </>
         )}
-        <div className={`flex items-center gap-2 px-3 py-1.5 ${collapsed ? "justify-center" : ""}`}>
-          <div className="w-6 h-6 rounded-full bg-[var(--primary)] flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-[10px] font-bold">AK</span>
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-[var(--foreground)] truncate">Alex Kim</div>
-              <div className="text-[10px] text-[var(--muted-foreground)] truncate">alex@acme.dev</div>
-            </div>
-          )}
-        </div>
+
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex items-center justify-center p-1.5 text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-[var(--radius)] hover:bg-[var(--secondary)] transition-colors cursor-pointer mt-1"

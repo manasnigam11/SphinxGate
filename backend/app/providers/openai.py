@@ -20,13 +20,13 @@ from typing import Any
 
 import httpx
 
-from app.providers.base import BaseProvider
+from app.providers.base import BaseLLMProvider
 
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
-class OpenAIProvider(BaseProvider):
+class OpenAIProvider(BaseLLMProvider):
     slug = "openai"
     display_name = "OpenAI"
 
@@ -60,3 +60,15 @@ class OpenAIProvider(BaseProvider):
             # classify and handle the error.
             response.raise_for_status()
             return response.json()
+
+    async def health_check(self, api_key: str | None) -> bool | None:
+        if not api_key:
+            return None
+        
+        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {"Authorization": f"Bearer {api_key}"}
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{OPENAI_BASE_URL}/models", headers=headers)
+            response.raise_for_status()
+            return True
+
