@@ -91,7 +91,7 @@ npm install
 npm run dev
 ```
 
-The Dashboard will be available at: `http://localhost:5173`
+
 
 ---
 
