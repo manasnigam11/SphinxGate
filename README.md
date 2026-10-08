@@ -43,9 +43,6 @@ SphinxGate uses a strict, unidirectional data pipeline:
 3. **Provider Adapter:** The engine delegates the network call to stateless adapters (e.g., `GeminiProvider`), converting the unified OpenAI payload into the specific provider's required schema.
 4. **Recovery / Telemetry:** If an error occurs, the engine classifies it, retries it, or routes to a fallback. Telemetry is emitted asynchronously to local storage to avoid blocking the client.
 
-<div align="center">
-  <img src="https://via.placeholder.com/800x400/111827/ffffff?text=Client+->+Resilience+Engine+->+Circuit+Breaker+->+Provider+Adapters" alt="Architecture Flow" />
-</div>
 
 ---
 
@@ -120,6 +117,38 @@ The backend contains a heavy suite of mocked resilience tests to prove the fallb
 cd backend
 pytest
 ```
+
+---
+
+## 🔮 Future Scopes
+
+### 1. Intelligent Provider Routing
+- Intent-aware provider selection based on the type and requirements of a request.
+- Capability-aware routing based on provider strengths.
+- Dynamic provider scoring using reliability, latency, cost, quota, and health.
+
+### 2. Semantic API Fallback
+- Fallback between semantically equivalent third-party APIs.
+- Automatic response-schema normalization across different providers.
+- Advanced graceful degradation using cached or stale data when temporary unavailability is preferable to complete failure.
+
+### 3. Predictive Reliability
+- Historical reliability profiles for providers.
+- Detection of degradation trends before complete outages.
+- Proactive rerouting based on predicted provider health.
+
+### 4. Provider Reliability Intelligence
+- Long-term provider performance analysis.
+- Reliability scoring across providers and services.
+- Data-driven recommendations for selecting providers based on workload requirements.
+
+### 5. Platform Expansion
+- Multi-tenant gateway architecture.
+- Centralized provider credential management.
+- Per-tenant usage, quotas, budgets, and analytics.
+- Expanded support for local and on-premise AI providers.
+
+> **Note:** The capabilities listed above are future directions and are not part of the current implementation.
 
 ---
 
